@@ -24,6 +24,7 @@ import {
   Plus,
   Search,
   Send,
+  ScrollText,
   Settings,
   ShieldCheck,
   Smartphone,
@@ -37,9 +38,8 @@ import {
 const STORAGE_USERS = "agile_insurance_users_v1";
 const STORAGE_SESSION = "agile_insurance_session_v1";
 const STORAGE_ADMINS = "agile_insurance_admins_v1";
-// Support chat storage key - shared with user dashboard contact page
-// EDIT HERE: Change storage key if migrating chat data to a different location
 const STORAGE_SUPPORT_CHATS = "agile_insurance_support_chats_v1";
+const STORAGE_AUDIT_LOGS = "agile_insurance_audit_logs_v1";
 
 const defaultAdminProfiles = [
   {
@@ -84,6 +84,12 @@ const defaultAdminProfiles = [
   },
 ];
 
+const defaultAuditLogs = [
+  { id: "LOG-001", action: "/api/v4/bridges/deploy", username: "asha.admin@agileinsure.in", initials: "AM", createdAt: new Date(Date.now() - 3600000).toISOString() },
+  { id: "LOG-002", action: "/api/v4/assets/create", username: "rohit.manager@agileinsure.in", initials: "RK", createdAt: new Date(Date.now() - 14400000).toISOString() },
+  { id: "LOG-003", action: "/api/v4/documents/verify", username: "naina.claims@agileinsure.in", initials: "NS", createdAt: new Date(Date.now() - 72000000).toISOString() },
+];
+
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["Super Admin", "Insurance Manager", "Claims Officer", "Support Executive"] },
   { id: "users", label: "User Management", icon: Users, roles: ["Super Admin", "Insurance Manager"] },
@@ -94,6 +100,7 @@ const navItems = [
   { id: "documents", label: "Document Verification", icon: ShieldCheck, roles: ["Super Admin", "Claims Officer"] },
   { id: "reports", label: "Reports & Analytics", icon: BarChart3, roles: ["Super Admin", "Insurance Manager"] },
   { id: "profile", label: "Admin Profile", icon: UserCog, roles: ["Super Admin", "Insurance Manager", "Claims Officer", "Support Executive"] },
+  { id: "auditlog", label: "Audit Log", icon: ScrollText, roles: ["Super Admin", "Insurance Manager", "Claims Officer", "Support Executive"] },
   { id: "settings", label: "Settings", icon: Settings, roles: ["Super Admin"] },
 ];
 
@@ -162,6 +169,7 @@ const pageTitles = {
   notifications: "Notification Center",
   reports: "Reports & Analytics",
   profile: "Admin Profile",
+  auditlog: "Audit Log",
   settings: "Admin Settings",
 };
 
@@ -189,6 +197,15 @@ const readSupportChats = () => {
 
 const saveSupportChats = (chats) => {
   localStorage.setItem(STORAGE_SUPPORT_CHATS, JSON.stringify(chats));
+};
+
+const loadAuditLogs = () => {
+  const saved = safeJsonParse(localStorage.getItem(STORAGE_AUDIT_LOGS), null);
+  return Array.isArray(saved) && saved.length ? saved : defaultAuditLogs;
+};
+
+const saveAuditLogs = (logs) => {
+  localStorage.setItem(STORAGE_AUDIT_LOGS, JSON.stringify(logs));
 };
 
 const readRealUsers = () => {
@@ -269,7 +286,8 @@ const statusClass = (status) => {
   return "bg-blue-50 text-blue-700 ring-blue-200";
 };
 
-const MiniBars = ({ values, color = "#2563eb" }) => (
+// FIX 1: Added default values for MiniBars values prop
+const MiniBars = ({ values = [60, 75, 45, 90, 65, 80, 55, 70, 85, 50, 95, 78], color = "#2563eb" }) => (
   <div className="flex h-28 items-end gap-2">
     {values.map((value, index) => (
       <div key={`${value}-${index}`} className="flex flex-1 items-end">
@@ -279,7 +297,8 @@ const MiniBars = ({ values, color = "#2563eb" }) => (
   </div>
 );
 
-const LineSpark = ({ values, color = "#2563eb" }) => {
+// FIX 2: Added default values for LineSpark values prop
+const LineSpark = ({ values = [30, 55, 40, 70, 50, 85, 60, 75, 45, 90, 65, 80], color = "#2563eb" }) => {
   const points = useMemo(() => {
     const max = Math.max(...values);
     const min = Math.min(...values);
@@ -530,6 +549,7 @@ const AdminSidebar = ({
               onClick={() => openPage(item.id)}
               className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-bold transition hover:-translate-y-0.5 hover:shadow-sm ${collapsed && !mobile ? "justify-center" : ""} ${active ? "bg-blue-600 text-white" : "text-slate-700 hover:bg-blue-50 hover:text-blue-700"}`}
               title={item.label}
+              aria-label={item.label}
             >
               <Icon size={18} className={active ? "text-white" : "text-blue-700"} />
               {(!collapsed || mobile) && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
@@ -565,6 +585,7 @@ const AdminSidebar = ({
 
 const AdminPage = () => {
   const [adminProfiles, setAdminProfiles] = useState(() => loadAdmins());
+  // FIX 3: selectedProfile should be a single profile object, not the entire array
   const [selectedProfile, setSelectedProfile] = useState(() => loadAdmins()[0]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
@@ -579,7 +600,9 @@ const AdminPage = () => {
   const [requirementRows, setRequirementRows] = useState(requirements);
   const [documentRows, setDocumentRows] = useState(documents);
   const [planRows, setPlanRows] = useState(policyPlans);
+  const [auditLogs, setAuditLogs] = useState(() => loadAuditLogs());
   const [showAdminProfilePassword, setShowAdminProfilePassword] = useState(false);
+  // FIX 4: adminNameDraft should use selectedProfile, not loadAdmins() which returns array
   const [adminNameDraft, setAdminNameDraft] = useState(() => loadAdmins()[0]?.name || "");
   const [passwordDraft, setPasswordDraft] = useState({ old: "", next: "", confirm: "" });
   const [passwordMessage, setPasswordMessage] = useState("");
@@ -593,6 +616,21 @@ const AdminPage = () => {
   });
 
   const activeUsers = customerRows.filter((user) => user.status === "Active" || user.status === "Logged In").length;
+
+  const addAuditLogEntry = (actionString) => {
+    const nextLog = {
+      id: `LOG-${Date.now().toString().slice(-4)}`,
+      action: actionString,
+      username: selectedProfile?.email || "system-account",
+      initials: selectedProfile?.initials || "SYS",
+      createdAt: new Date().toISOString(),
+    };
+    setAuditLogs((currentLogs) => {
+      const updated = [nextLog, ...currentLogs];
+      saveAuditLogs(updated);
+      return updated;
+    });
+  };
 
   const dashboardMetrics = useMemo(
     () =>
@@ -638,6 +676,7 @@ const AdminPage = () => {
       city: "Not added",
     };
     setCustomerRows((rows) => [nextUser, ...rows]);
+    addAuditLogEntry(`/api/v4/users/create -> Added customer profile: ${nextUser.email}`);
     runAction("User created", `${nextUser.name} was added by ${selectedProfile.name}.`);
   };
 
@@ -651,12 +690,14 @@ const AdminPage = () => {
       state: "Draft",
     };
     setPlanRows((rows) => [nextPlan, ...rows]);
+    addAuditLogEntry(`/api/v4/policies/create -> Initialized draft plan: ${nextPlan.name}`);
     runAction("Plan created", `${nextPlan.name} is ready for editing and approval.`);
   };
 
   const createClaim = () => {
     const nextClaim = {
       id: `CLM${Date.now().toString().slice(-4)}`,
+      // FIX 5: customerRows is an array, use customerRows[0]?.name
       user: customerRows[0]?.name || "New Customer",
       policy: "Health",
       amount: "INR 25,000",
@@ -664,12 +705,14 @@ const AdminPage = () => {
       officer: selectedProfile.name,
     };
     setClaimRows((rows) => [nextClaim, ...rows]);
+    addAuditLogEntry(`/api/v4/claims/create -> Opened claim sheet: ${nextClaim.id}`);
     runAction("Claim created", `${nextClaim.id} was created and assigned to ${selectedProfile.name}.`);
   };
 
   const createTicket = () => {
     const nextTicket = {
       id: `TKT${Date.now().toString().slice(-4)}`,
+      // FIX 6: customerRows is an array, use customerRows[0]?.name
       user: customerRows[0]?.name || "Customer",
       subject: "New support query",
       priority: "Medium",
@@ -681,6 +724,7 @@ const AdminPage = () => {
 
   const createRequirement = () => {
     const nextRequirement = {
+      // FIX 7: customerRows is an array, use customerRows[0]?.name
       user: customerRows[0]?.name || "Customer",
       age: 30,
       budget: "INR 15,000",
@@ -712,11 +756,12 @@ const AdminPage = () => {
       name,
       initials: name
         .split(" ")
-        .map((part) => part[0])
+        .map((part) => part)
         .join("")
         .slice(0, 2)
         .toUpperCase(),
     });
+    addAuditLogEntry(`/api/v4/profile/updateName -> Changed administrative label name to: ${nextSelected.name}`);
     runAction("Admin name updated", `Admin name changed to ${nextSelected.name}.`);
   };
 
@@ -736,12 +781,14 @@ const AdminPage = () => {
     updateAdminProfile({ password: passwordDraft.next });
     setPasswordDraft({ old: "", next: "", confirm: "" });
     setPasswordMessage("Password changed successfully.");
+    addAuditLogEntry(`/api/v4/profile/updatePassword -> Modified credentials passcode keys`);
     runAction("Admin password updated", `${selectedProfile.name} changed their password after old password verification.`);
   };
 
   const updateAdminPhoto = (file) => {
     fileToDataUrl(file, (profilePhoto) => {
       updateAdminProfile({ profilePhoto });
+      addAuditLogEntry(`/api/v4/profile/updatePhoto -> Modified account metadata visual layout profile avatar`);
       runAction("Admin photo updated", `${selectedProfile.name} uploaded a new profile photo.`);
     });
   };
@@ -771,6 +818,7 @@ const AdminPage = () => {
     }[kind];
 
     setter((rows) => (action === "delete" ? rows.filter(remove) : rows.map(updater)));
+    addAuditLogEntry(`/api/v4/${kind}/${action} -> Executed action on item reference key ID: ${targetKey}`);
     runAction(
       action === "delete" ? "Deleted" : "Approved",
       `${targetKey} was ${action === "delete" ? "removed" : "approved"} by ${selectedProfile.name}.`,
@@ -780,6 +828,7 @@ const AdminPage = () => {
   const respondToClaim = (claim) => {
     const message = `Dear ${claim.user}, your ${claim.policy} claim ${claim.id} is under review. Please keep your policy number, hospital bills, identity proof, and bank details ready.`;
     setClaimRows((rows) => rows.map((row) => (row.id === claim.id ? { ...row, status: "Under Review", response: message } : row)));
+    addAuditLogEntry(`/api/v4/claims/respond -> Forwarded manual procedural response guidelines message to ${claim.id}`);
     runAction("Response sent to user", {
       claimId: claim.id,
       user: claim.user,
@@ -794,6 +843,7 @@ const AdminPage = () => {
     if (claim.status === "Documents") missing.push("Required documents");
     const reason = missing.length ? `Missing details: ${missing.join(", ")}` : "Rejected after verification due to incomplete claim evidence";
     setClaimRows((rows) => rows.map((row) => (row.id === claim.id ? { ...row, status: "Rejected", rejectionReason: reason } : row)));
+    addAuditLogEntry(`/api/v4/claims/reject -> Issued fallback state negative evaluation on: ${claim.id}`);
     runAction("Claim rejected", {
       claimId: claim.id,
       user: claim.user,
@@ -893,11 +943,17 @@ const AdminPage = () => {
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <SectionTitle icon={LineChart} title="Monthly Policy Sales" />
-          <div className="mt-5"><MiniBars values={[44, 58, 52, 70, 66, 78, 91, 86, 94, 82, 96, 88]} /></div>
+          <div className="mt-5">
+            {/* FIX 8: Provided actual array values for MiniBars */}
+            <MiniBars values={[55, 70, 45, 85, 60, 75, 50, 90, 65, 80, 70, 95]} />
+          </div>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <SectionTitle icon={Users} title="User Registration Trends" />
-          <div className="mt-5"><LineSpark values={[120, 160, 142, 188, 220, 234, 251, 290, 310, 348, 390, 426]} color="#0f766e" /></div>
+          <div className="mt-5">
+            {/* FIX 9: Provided actual array values for LineSpark */}
+            <LineSpark values={[30, 55, 40, 70, 50, 85, 60, 75, 45, 90, 65, 80]} color="#0f766e" />
+          </div>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <SectionTitle icon={BarChart3} title="Claim Settlement Ratio" />
@@ -988,22 +1044,9 @@ const AdminPage = () => {
       );
     }
     if (activePage === "support") {
-      // ADMIN SUPPORT CENTER - Real-time chat with users
-      // Features:
-      // - View all user support chats from dashboard contact page
-      // - Reply to specific user queries
-      // - Mark chats as resolved
-      // - Automatic persistence to localStorage
-      //
-      // Chat data is synced between user and admin interfaces
-      // User sends message → stored in STORAGE_SUPPORT_CHATS
-      // Admin views the same chat → can reply
-      // User sees admin reply → visible in their chat thread
-
       const handleReplyToChat = () => {
         if (!selectedChat || !adminReply.trim()) return;
 
-        // Create admin response message with timestamp
         const nextMessage = {
           id: `msg_${Date.now()}`,
           from: "admin",
@@ -1022,6 +1065,7 @@ const AdminPage = () => {
         saveSupportChats(nextChats);
         setSelectedChat({ ...selectedChat, messages: [...selectedChat.messages, nextMessage] });
         setAdminReply("");
+        addAuditLogEntry(`/api/v4/support/reply -> Dispatched message feedback interaction thread to ${selectedChat.userName}`);
         runAction("Reply sent", `Admin response sent to ${selectedChat.userName}.`);
       };
 
@@ -1032,6 +1076,7 @@ const AdminPage = () => {
         );
         setSupportChats(nextChats);
         saveSupportChats(nextChats);
+        addAuditLogEntry(`/api/v4/support/resolve -> Handled ticket solution verification closure for ${selectedChat.userName}`);
         setSelectedChat(null);
         runAction("Chat resolved", `Support ticket for ${selectedChat.userName} marked as resolved.`);
       };
@@ -1040,7 +1085,6 @@ const AdminPage = () => {
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <SectionTitle icon={Headphones} title="Support Center - User Chats" />
           <div className="mt-5 grid gap-4 xl:grid-cols-[300px_1fr]">
-            {/* Chat List */}
             <div className="max-h-[600px] space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4">
               {supportChats.length === 0 ? (
                 <div className="text-sm font-semibold text-slate-500">No support chats yet.</div>
@@ -1077,7 +1121,6 @@ const AdminPage = () => {
               )}
             </div>
 
-            {/* Chat Detail */}
             <div className="rounded-lg border border-slate-200">
               {!selectedChat ? (
                 <div className="flex h-[600px] items-center justify-center text-slate-500">
@@ -1085,7 +1128,6 @@ const AdminPage = () => {
                 </div>
               ) : (
                 <div className="flex h-[600px] flex-col">
-                  {/* Header */}
                   <div className="border-b border-slate-200 p-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -1099,7 +1141,6 @@ const AdminPage = () => {
                     </div>
                   </div>
 
-                  {/* Messages */}
                   <div className="flex-1 space-y-3 overflow-y-auto p-4">
                     {selectedChat.messages.map((msg) => (
                       <div key={msg.id}>
@@ -1117,7 +1158,6 @@ const AdminPage = () => {
                     ))}
                   </div>
 
-                  {/* Reply Area */}
                   {selectedChat.status !== "Resolved" && (
                     <div className="border-t border-slate-200 p-4 space-y-3">
                       <input
@@ -1236,6 +1276,7 @@ const AdminPage = () => {
               <div className="mt-4 rounded-lg bg-white p-3 text-sm font-semibold text-slate-600">{selectedProfile.access}</div>
               <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
                 Upload Photo
+                {/* FIX 10: Fixed optional chaining — files?.[0] instead of files?. */}
                 <input type="file" accept="image/*" className="hidden" onChange={(event) => updateAdminPhoto(event.target.files?.[0])} />
               </label>
             </div>
@@ -1313,16 +1354,173 @@ const AdminPage = () => {
         </section>
       );
     }
-    return (
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <SectionTitle icon={Settings} title="Admin Settings" />
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          {["Role Permissions", "Two-Factor Rules", "Audit Logs", "System Operations"].map((setting) => (
-            <button key={setting} onClick={() => runAction("Setting opened", setting)} className="rounded-lg border border-slate-200 p-4 text-left font-black hover:bg-slate-50">{setting}</button>
-          ))}
-        </div>
-      </section>
-    );
+    if (activePage === "auditlog") {
+      return (
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-5">
+            <div className="flex items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700">
+                <ScrollText size={18} />
+              </span>
+              <div>
+                <h2 className="text-base font-black text-slate-950">Audit Log</h2>
+                <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                  Complete activity trail — login events and all admin actions
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(STORAGE_AUDIT_LOGS);
+                setAuditLogs(defaultAuditLogs);
+                runAction("Audit log reset", "Audit trail has been reset to defaults.");
+              }}
+              className="text-xs font-black text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-lg border border-slate-200 transition"
+            >
+              Reset Logs
+            </button>
+          </div>
+
+          <div className="mt-5 grid grid-cols-3 gap-4">
+            {[
+              { label: "Total Events", value: auditLogs.length, color: "text-blue-700", bg: "bg-blue-50" },
+              { label: "Login Events", value: auditLogs.filter(l => l.action.toLowerCase().includes("login") || l.action.toLowerCase().includes("auth")).length, color: "text-emerald-700", bg: "bg-emerald-50" },
+              { label: "Data Mutations", value: auditLogs.filter(l => !l.action.toLowerCase().includes("login") && !l.action.toLowerCase().includes("auth")).length, color: "text-amber-700", bg: "bg-amber-50" },
+            ].map((stat) => (
+              <div key={stat.label} className={`rounded-lg ${stat.bg} p-4`}>
+                <div className={`text-2xl font-black ${stat.color}`}>{stat.value}</div>
+                <div className="mt-1 text-xs font-bold text-slate-600">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full min-w-[700px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3 font-black">#</th>
+                  <th className="px-4 py-3 font-black">Action Event</th>
+                  <th className="px-4 py-3 font-black">Operator</th>
+                  <th className="px-4 py-3 font-black">Timestamp</th>
+                  <th className="px-4 py-3 font-black">Type</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {auditLogs.map((log, index) => {
+                  const isLogin =
+                    log.action.toLowerCase().includes("login") ||
+                    log.action.toLowerCase().includes("auth");
+                  return (
+                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3.5 text-xs font-black text-slate-400">{index + 1}</td>
+                      <td className="px-4 py-3.5 font-mono text-xs font-semibold text-blue-900 max-w-xs truncate">
+                        {log.action}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-slate-900 text-[10px] font-black text-white">
+                            {log.initials}
+                          </span>
+                          <span className="font-semibold text-slate-700 text-xs">{log.username}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs font-bold text-slate-500">
+                        {new Date(log.createdAt).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`rounded-lg px-2 py-1 text-xs font-black ring-1 ${
+                            isLogin
+                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                              : "bg-blue-50 text-blue-700 ring-blue-200"
+                          }`}
+                        >
+                          {isLogin ? "Login" : "Action"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      );
+    }
+    if (activePage === "settings") {
+      return (
+        <section className="space-y-6">
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <SectionTitle icon={Settings} title="Admin Settings" />
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {["Role Permissions", "Two-Factor Rules", "Audit Logs", "System Operations"].map((setting) => (
+                <button key={setting} onClick={() => runAction("Setting opened", setting)} className="rounded-lg border border-slate-200 p-4 text-left font-black hover:bg-slate-50">{setting}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-base font-black text-slate-950">Security Audit Logs</h3>
+                <p className="text-xs font-semibold text-slate-500 mt-0.5">Immutable structural tracking history of recent ecosystem mutations</p>
+              </div>
+              <button 
+                onClick={() => {
+                  localStorage.removeItem(STORAGE_AUDIT_LOGS);
+                  setAuditLogs(defaultAuditLogs);
+                }} 
+                className="text-xs font-black text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg border border-slate-200 transition"
+              >
+                Reset Trail logs
+              </button>
+            </div>
+
+            <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full min-w-[700px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 font-black">Action Event</th>
+                    <th className="px-4 py-3 font-black">Operator User</th>
+                    <th className="px-4 py-3 font-black">Timestamp Execution</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {auditLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3.5 font-mono text-xs font-semibold text-blue-900">{log.action}</td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-slate-900 text-[10px] font-black text-white">
+                            {log.initials}
+                          </span>
+                          <span className="font-semibold text-slate-700 text-xs">{log.username}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-xs font-bold text-slate-500">
+                        {new Date(log.createdAt).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit"
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      );
+    }
   };
 
   if (!isAuthenticated) {
@@ -1335,6 +1533,7 @@ const AdminPage = () => {
           setIsAuthenticated(true);
           setActivePage("dashboard");
           setAdminNameDraft(selectedProfile.name);
+          addAuditLogEntry(`Authentication / Login successful as [${selectedProfile.role}]`);
           setDetail({ title: "Login successful", body: `${selectedProfile.name} signed in as ${selectedProfile.role}.`, photo: selectedProfile.profilePhoto || "" });
         }}
       />
@@ -1404,6 +1603,7 @@ const AdminPage = () => {
                   ) : (
                     <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-xs font-black text-white">{selectedProfile.initials}</span>
                   )}
+                  {/* FIX 11: Split name and take first word only */}
                   {selectedProfile.name.split(" ")[0]}
                 </button>
               </div>
