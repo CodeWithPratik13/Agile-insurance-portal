@@ -11,6 +11,7 @@ import {
 import { load, save, uid } from "../../utils/storage";
 import { chance } from "../../utils/ids";
 import { useAuth } from "../../contexts/useAuth";
+import { addUserNotification } from "../../utils/notifications";
 
 // Claim flow step names, status labels, and form labels are controlled here.
 const claimSteps = [
@@ -70,8 +71,9 @@ const DashboardClaims = () => {
     await new Promise((r) => setTimeout(r, 900));
     const now = new Date().toISOString();
     const all = load("claims", []);
+    const claimId = uid("claim");
     all.unshift({
-      id: uid("claim"),
+      id: claimId,
       userId: user?.id || "",
       user: user?.fullName || "Customer",
       email: user?.email || "",
@@ -91,6 +93,14 @@ const DashboardClaims = () => {
       progress: 2,
     });
     save("claims", all);
+    addUserNotification({
+      userId: user?.id || "",
+      userEmail: user?.email || "",
+      type: "claim-submitted",
+      title: "Claim Submitted",
+      body: `Your ${form.type} claim ${claimId} has been submitted and sent to the claims team.`,
+      referenceId: claimId,
+    });
     setBusy(false);
     setOpen(false);
     setClaims(readMyClaims());
@@ -116,6 +126,16 @@ const DashboardClaims = () => {
       timeline,
     };
     save("claims", all);
+    addUserNotification({
+      userId: all[idx].userId,
+      userEmail: all[idx].email,
+      type: approved ? "claim-verified" : "claim-rejected",
+      title: approved ? "Claim Verification Passed" : "Claim Rejected",
+      body: approved
+        ? `Claim ${id} passed AI verification and moved to manual review.`
+        : `Claim ${id} was rejected because verification flagged an anomaly.`,
+      referenceId: id,
+    });
     setClaims(readMyClaims());
   };
 

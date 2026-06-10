@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { KeyRound, Lock, Mail, MapPin, Phone, ShieldCheck, User } from "lucide-react";
 import { useAuth } from "../contexts/useAuth";
+import { getModuleSetting } from "../utils/systemSettings";
 
 // Authentication screen copy, field labels, validation messages, and auth CTAs live in this file.
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
@@ -60,6 +61,9 @@ const AuthPage = () => {
   const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Authentication feature gates are controlled from Admin > System Settings.
+  const customerPortalEnabled = getModuleSetting("configuration", "customerPortal", true);
+  const googleLoginEnabled = getModuleSetting("social", "googleLogin", true);
 
   const resetMessaging = () => {
     setError("");
@@ -69,6 +73,10 @@ const AuthPage = () => {
   const onSubmit = async (e) => {
     e.preventDefault();
     resetMessaging();
+    if (!customerPortalEnabled) {
+      setError("Customer portal access is currently disabled by the administrator.");
+      return;
+    }
 
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedName = fullName.trim();
@@ -142,7 +150,7 @@ const AuthPage = () => {
   };
 
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
+    if (!GOOGLE_CLIENT_ID || !googleLoginEnabled) return;
 
     const initializeGoogleTokenClient = () => {
       if (!window.google?.accounts?.oauth2) return;
@@ -168,10 +176,14 @@ const AuthPage = () => {
     script.onload = initializeGoogleTokenClient;
     script.onerror = () => setError("Could not load Google sign-in. Check your connection and try again.");
     document.head.appendChild(script);
-  }, []);
+  }, [googleLoginEnabled]);
 
   const onGoogleLogin = () => {
     resetMessaging();
+    if (!googleLoginEnabled) {
+      setError("Google sign-in is disabled by the administrator.");
+      return;
+    }
     if (!googleTokenClientRef.current) {
       setError("Google sign-in is still loading. Please try again in a moment.");
       return;
@@ -226,6 +238,11 @@ const AuthPage = () => {
                   ? "Enter the 6-digit OTP sent to your email address to finish account verification."
                   : "Frontend-only authentication, document vault, and connected dashboard state."}
               </p>
+              {!customerPortalEnabled ? (
+                <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+                  Customer portal access is disabled in admin settings.
+                </div>
+              ) : null}
             </div>
 
           </div>
@@ -376,7 +393,7 @@ const AuthPage = () => {
             )}
 
             <button
-              disabled={busy}
+              disabled={busy || !customerPortalEnabled}
               className="relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 text-sm font-bold text-white shadow-sm transition hover:opacity-95 disabled:opacity-70"
             >
               {busy ? "Securing your portal..." : mode === "register" ? (otpStep ? "Verify OTP" : "Create Account") : "Login"}
@@ -402,7 +419,7 @@ const AuthPage = () => {
                 <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">or</span>
                 <div className="h-px flex-1 bg-slate-200" />
               </div>
-              {GOOGLE_CLIENT_ID ? (
+              {GOOGLE_CLIENT_ID && googleLoginEnabled ? (
                 <button
                   type="button"
                   onClick={onGoogleLogin}
@@ -412,6 +429,10 @@ const AuthPage = () => {
                   <GoogleLogo />
                   Continue with Google
                 </button>
+              ) : !googleLoginEnabled ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                  Google sign-in is disabled in admin settings.
+                </div>
               ) : (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
                   Google sign-in needs VITE_GOOGLE_CLIENT_ID before users can select a Google account.

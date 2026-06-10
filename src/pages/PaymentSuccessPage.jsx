@@ -181,6 +181,34 @@ const PaymentSuccessPage = () => {
             ))}
           </div>
 
+          {(purchase.addOns?.length || Object.keys(purchase.policyForm?.answers || {}).length) ? (
+            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-5 sm:rounded-[2.2rem] sm:p-6">
+              <div className="text-sm font-black text-slate-900">Policy details submitted</div>
+              {purchase.addOns?.length ? (
+                <div className="mt-4">
+                  <div className="text-xs font-bold text-slate-500">Selected add-ons</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {purchase.addOns.map((addOn) => (
+                      <span key={addOn} className="rounded-full bg-blue-600/10 px-3 py-2 text-xs font-black text-blue-700">
+                        {addOn}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {Object.keys(purchase.policyForm?.answers || {}).length ? (
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {Object.entries(purchase.policyForm.answers).map(([key, value]) => (
+                    <div key={key} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="text-[11px] font-bold capitalize text-slate-500">{key.replace(/([A-Z])/g, " $1")}</div>
+                      <div className="mt-1 text-sm font-black text-slate-900">{value || "Not provided"}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-10 flex flex-col gap-3 sm:flex-row">
             <button
               onClick={() => window.alert("Invoice download is mocked in this frontend-only demo.")}

@@ -1,11 +1,51 @@
 const TOKEN_KEY = "agile_insurance_api_token_v1";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
-// Frontend-only session token helpers. No backend API server is required.
+// Auth token helpers. Express backend can return this token from POST /api/auth/login or /api/auth/verify-otp.
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 
 export const setToken = (token) => {
   if (token) localStorage.setItem(TOKEN_KEY, token);
   else localStorage.removeItem(TOKEN_KEY);
+};
+
+// Central endpoint map for the Node/Express team. Keep page components pointed at services/helpers, not hardcoded URLs.
+export const API_ENDPOINTS = {
+  auth: {
+    register: "/api/auth/register",
+    verifyOtp: "/api/auth/verify-otp",
+    login: "/api/auth/login",
+    google: "/api/auth/google",
+    me: "/api/auth/me",
+  },
+  policies: "/api/policies",
+  policyById: (id) => `/api/policies/${id}`,
+  purchases: "/api/purchases",
+  claims: "/api/claims",
+  claimById: (id) => `/api/claims/${id}`,
+  payments: "/api/payments",
+  notifications: "/api/notifications",
+  documents: "/api/documents",
+  settings: "/api/admin/settings",
+};
+
+// Backend-ready fetch wrapper. Current screens still fall back to localStorage until API_BASE_URL is configured.
+export const apiRequest = async (endpoint, options = {}) => {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_BASE_URL is not configured. Frontend is using local demo storage.");
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.message || payload?.error || "API request failed.");
+  return payload;
 };
 
 export const fileToDataUrl = (file) =>

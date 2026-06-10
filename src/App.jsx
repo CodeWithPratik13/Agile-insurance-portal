@@ -53,12 +53,9 @@ const App = () => {
             </ProtectedRoute>
           }
         />
-        {/* Footer navigation information pages */}
+        {/* Footer navigation information pages. Product slugs stay on CategoryPage so users see policy cards and filters. */}
         <Route path="/general-insurance" element={<InfoPage />} />
-        <Route path="/life-insurance" element={<InfoPage />} />
-        <Route path="/term-insurance" element={<InfoPage />} />
         <Route path="/investment" element={<InfoPage />} />
-        <Route path="/health-insurance" element={<InfoPage />} />
         <Route path="/other-insurance" element={<InfoPage />} />
         <Route path="/articles" element={<InfoPage />} />
         <Route path="/reviews" element={<InfoPage />} />

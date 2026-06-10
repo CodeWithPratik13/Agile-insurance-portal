@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { AuthContext } from "./authContextInstance";
 import { getToken, setToken } from "../utils/api";
+import { getModuleSetting } from "../utils/systemSettings";
 
 const STORAGE_SESSION = "agile_insurance_session_v1";
 const STORAGE_LEGACY = "agile_insurance_auth_v1";
@@ -58,6 +59,10 @@ export const AuthProvider = ({ children }) => {
 
   // Developer note: keep registration fields in sync with AuthPage and admin readRealUsers().
   const register = async ({ fullName, email, phone, address, password }) => {
+    if (!getModuleSetting("configuration", "customerPortal", true)) {
+      throw new Error("Customer portal registration is temporarily disabled by the administrator.");
+    }
+
     const users = readUsers();
     if (users.some((u) => u.email === email)) {
       throw new Error("An account with this email already exists.");
@@ -85,6 +90,10 @@ export const AuthProvider = ({ children }) => {
 
   // Developer note: verification currently checks the pending localStorage record.
   const verifyOtp = async ({ email, otp }) => {
+    if (!getModuleSetting("configuration", "customerPortal", true)) {
+      throw new Error("Customer portal verification is temporarily disabled by the administrator.");
+    }
+
     const pending = safeJsonParse(localStorage.getItem(STORAGE_PENDING), null);
     if (!pending || pending.email !== email) throw new Error("No pending registration found for this email.");
     if (otp !== pending.otp) throw new Error("Invalid OTP. Enter the latest code sent to your email.");
@@ -107,6 +116,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async ({ email, password }) => {
+    if (!getModuleSetting("configuration", "customerPortal", true)) {
+      throw new Error("Customer portal login is temporarily disabled by the administrator.");
+    }
+
     const users = readUsers();
     const match = users.find((u) => u.email === email && u.password === password);
     if (!match) throw new Error("Invalid email or password.");
@@ -126,6 +139,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const googleLogin = async () => {
+    if (!getModuleSetting("configuration", "customerPortal", true)) {
+      throw new Error("Customer portal login is temporarily disabled by the administrator.");
+    }
+    if (!getModuleSetting("social", "googleLogin", true)) {
+      throw new Error("Google sign-in is disabled by the administrator.");
+    }
+
     const googleUser = {
       id: `google_${Date.now()}`,
       fullName: "Google User",

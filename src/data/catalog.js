@@ -1,4 +1,5 @@
 const inr = (value) => `₹${Number(value).toLocaleString("en-IN")}`;
+const ADMIN_POLICIES_KEY = "agile_insurance_admin_policies_v1";
 
 // Change category slugs, titles, subtitles, gradients, and company lists here to update homepage cards and listing pages.
 export const categories = [
@@ -222,6 +223,65 @@ export const policies = categories.flatMap((c) =>
   c.companies.flatMap((company, idx) => [1, 2, 3].map((n) => makePolicy(c.slug, company, idx + n))),
 );
 
+// Backend handoff: replace localStorage reads/writes below with GET/POST/PUT /api/policies in Express.
+const safeJsonParse = (value, fallback) => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+// Admin-created policies are normalized to the same shape as built-in cards so public pages can render them immediately.
+export const readAdminPolicies = () => {
+  if (typeof localStorage === "undefined") return [];
+  const saved = safeJsonParse(localStorage.getItem(ADMIN_POLICIES_KEY), []);
+  return Array.isArray(saved) ? saved : [];
+};
+
+export const saveAdminPolicies = (nextPolicies) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(ADMIN_POLICIES_KEY, JSON.stringify(nextPolicies));
+};
+
+export const normalizeAdminPolicy = (plan) => {
+  const categorySlug = plan.categorySlug || `${String(plan.type || "health").toLowerCase().replace("motor", "car")}-insurance`;
+  const premiumYearly = Number(plan.premiumYearly || String(plan.premium || "").replace(/[^\d]/g, "")) || 11988;
+  const premiumMonthly = Number(plan.premiumMonthly) || Math.round(premiumYearly / 12);
+  const coverageAmount = Number(plan.coverageAmount || String(plan.coverage || "").replace(/[^\d]/g, "")) || 1000000;
+  const company = plan.company || "Agile Insurance";
+
+  return {
+    id: plan.id || `admin-policy-${Date.now()}`,
+    categorySlug,
+    company,
+    policyName: plan.policyName || plan.name || "Admin Created Policy",
+    companyBrand: companyLogos[company] ?? { initials: company.slice(0, 2).toUpperCase(), color: plan.themeColor || "bg-blue-600" },
+    premiumMonthly,
+    premiumYearly,
+    premiumLabel: inr(premiumMonthly),
+    coverageAmount,
+    coverageLabel: plan.coverage || inr(coverageAmount),
+    claimSettlementRatio: Number(plan.claimSettlementRatio) || 95,
+    validityYears: Number(plan.validityYears) || 1,
+    emiAvailable: plan.emiAvailable ?? true,
+    familyCoverage: Boolean(plan.familyCoverage),
+    policyType: plan.policyType || "Standard",
+    rating: Number(plan.rating) || 4.5,
+    aiBadge: plan.offer || plan.aiBadge || null,
+    keyBenefits: Array.isArray(plan.keyBenefits) ? plan.keyBenefits : ["Admin configured coverage", "Fast digital purchase", "Document-backed approval"],
+    exclusions: Array.isArray(plan.exclusions) ? plan.exclusions : ["Fraudulent claims", "Expired policy periods", "Missing documents"],
+    claimProcess: Array.isArray(plan.claimProcess) ? plan.claimProcess : ["Submit claim", "Upload documents", "Admin review", "Decision notification"],
+    faqs: Array.isArray(plan.faqs) ? plan.faqs : [{ q: "Who manages this plan?", a: "This plan was configured by an admin." }],
+    reviews: Array.isArray(plan.reviews) ? plan.reviews : [],
+    adminManaged: true,
+    themeColor: plan.themeColor || "#2563eb",
+    renewalDate: plan.renewalDate || "",
+    state: plan.state || "Active",
+  };
+};
+
+export const getAllPolicies = () => [...readAdminPolicies(), ...policies];
 export const getCategoryBySlug = (slug) => categories.find((c) => c.slug === slug);
-export const getPoliciesByCategory = (slug) => policies.filter((p) => p.categorySlug === slug);
-export const getPolicyById = (id) => policies.find((p) => p.id === id);
+export const getPoliciesByCategory = (slug) => getAllPolicies().filter((p) => p.categorySlug === slug && p.state !== "Inactive");
+export const getPolicyById = (id) => getAllPolicies().find((p) => p.id === id);

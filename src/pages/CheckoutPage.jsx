@@ -17,11 +17,40 @@ import {
 import { getPolicyById } from "../data/catalog";
 import { load, save, uid } from "../utils/storage";
 import { useAuth } from "../contexts/useAuth";
+import { getModuleSetting, paymentGatewayDefaults, policyFeatureDefaults, policyFormDefaults } from "../utils/systemSettings";
+import { addUserNotification } from "../utils/notifications";
 
 const formatInr = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
 // Checkout form labels, validation messages, payment method names, and success payload are managed here.
 const calcGst = (amount) => Math.round(amount * 0.18);
+
+// Gateway icons are local UI mappings; gateway enablement comes from admin System Settings.
+const gatewayIcons = {
+  razorpay: Wallet,
+  stripe: CreditCard,
+  paypal: Building2,
+  bankTransfer: Landmark,
+};
+
+// Checkout maps policy categories to the dynamic form groups configured by the admin.
+const policyCategoryFormMap = {
+  "health-insurance": "health",
+  "car-insurance": "vehicle",
+  "term-insurance": "life",
+  "life-insurance": "life",
+  "travel-insurance": "travel",
+  "home-insurance": "home",
+  "business-insurance": "business",
+};
+
+// Select fields need predictable production options until the admin builder supports per-field option editing.
+const dynamicSelectOptions = {
+  gender: ["Male", "Female", "Other", "Prefer not to say"],
+  smoker: ["No", "Yes"],
+  propertyType: ["Apartment", "Independent House", "Commercial", "Other"],
+  ownershipType: ["Owned", "Rented", "Leased"],
+};
 
 const CheckoutPage = () => {
   const { policyId } = useParams();
@@ -32,7 +61,11 @@ const CheckoutPage = () => {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("upi");
+  // Payment gateway selection is initialized from persisted admin settings.
+  const [paymentMethod, setPaymentMethod] = useState(() => {
+    const gateways = getModuleSetting("payment", "gateways", paymentGatewayDefaults);
+    return (Array.isArray(gateways) ? gateways : paymentGatewayDefaults).find((gateway) => gateway.enabled)?.methodId || "bankTransfer";
+  });
 
   const [form, setForm] = useState({
     fullName: user?.fullName ?? "",
@@ -45,13 +78,49 @@ const CheckoutPage = () => {
     state: "",
     pincode: "",
     kycDocName: "",
+    aadhaarDocName: "",
+    panDocName: "",
+    addressProofName: "",
+    photoName: "",
+    bankPassbookName: "",
+    otherDocName: "",
   });
+  const [dynamicAnswers, setDynamicAnswers] = useState({});
+  const [selectedAddOns, setSelectedAddOns] = useState([]);
 
   const premium = useMemo(() => policy?.premiumYearly ?? 0, [policy]);
   const gst = useMemo(() => calcGst(premium), [premium]);
   const total = premium + gst;
 
+  // Policy-specific fields and add-ons are read from Admin > System Settings > Policy Forms/Manage Features.
+  const dynamicFormType = policy ? policyCategoryFormMap[policy.categorySlug] || "" : "";
+  const dynamicPolicyFields = useMemo(() => {
+    const configuredForms = getModuleSetting("forms", "policyForms", policyFormDefaults);
+    return dynamicFormType ? configuredForms?.[dynamicFormType] || [] : [];
+  }, [dynamicFormType]);
+  const availableAddOns = useMemo(() => {
+    const configuredFeatures = getModuleSetting("features", "policyFeatures", policyFeatureDefaults);
+    return dynamicFormType ? configuredFeatures?.[dynamicFormType] || [] : [];
+  }, [dynamicFormType]);
+
+  // Enabled gateways are shown responsively in the checkout side panel.
+  const enabledPaymentGateways = useMemo(() => {
+    const configuredGateways = getModuleSetting("payment", "gateways", paymentGatewayDefaults);
+    return (Array.isArray(configuredGateways) ? configuredGateways : paymentGatewayDefaults)
+      .filter((gateway) => gateway.enabled)
+      .map((gateway) => ({
+        ...gateway,
+        id: gateway.methodId,
+        label: gateway.name,
+        icon: gatewayIcons[gateway.methodId] || CreditCard,
+      }));
+  }, []);
+
   const update = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const updateDynamicAnswer = (k, v) => setDynamicAnswers((p) => ({ ...p, [k]: v }));
+  const toggleAddOn = (addOn) => {
+    setSelectedAddOns((current) => (current.includes(addOn) ? current.filter((item) => item !== addOn) : [...current, addOn]));
+  };
 
   const validate = () => {
     if (!form.fullName.trim()) return "Full Name is required.";
@@ -62,7 +131,13 @@ const CheckoutPage = () => {
     if (!form.city.trim()) return "City is required.";
     if (!form.state.trim()) return "State is required.";
     if (!/^\d{6}$/.test(String(form.pincode || "").trim())) return "Enter a valid 6-digit pincode.";
-    if (!form.kycDocName.trim()) return "KYC upload is required (mock upload).";
+    if (!form.aadhaarDocName.trim()) return "Aadhaar document is required.";
+    if (!form.panDocName.trim()) return "PAN document is required.";
+    if (!form.addressProofName.trim()) return "Address proof is required.";
+    if (!form.photoName.trim()) return "Applicant photo is required.";
+    if (["life", "business"].includes(dynamicFormType) && !form.bankPassbookName.trim()) return "Bank passbook is required for this policy.";
+    const missingDynamicField = dynamicPolicyFields.find((field) => field.required && !String(dynamicAnswers[field.key] || "").trim());
+    if (missingDynamicField) return `${missingDynamicField.label} is required.`;
     return "";
   };
 
@@ -70,6 +145,7 @@ const CheckoutPage = () => {
     setError("");
     const v = validate();
     if (v) return setError(v);
+    if (!enabledPaymentGateways.length) return setError("No payment gateway is enabled. Please contact support.");
 
     setBusy(true);
     try {
@@ -93,13 +169,24 @@ const CheckoutPage = () => {
         premium,
         gst,
         paymentMethod,
+        paymentGateway: enabledPaymentGateways.find((gateway) => gateway.id === paymentMethod)?.name || paymentMethod,
         status: "Active",
         activatedAt: today.toISOString(),
         renewalAt: renewal.toISOString(),
         userSnapshot: { fullName: form.fullName, email: form.email, phone: form.phone },
         nominee: { name: form.nomineeName, relation: form.nomineeRelation },
         address: { line1: form.addressLine1, city: form.city, state: form.state, pincode: form.pincode },
-        kyc: { filename: form.kycDocName },
+        kyc: {
+          aadhaar: form.aadhaarDocName,
+          pan: form.panDocName,
+          addressProof: form.addressProofName,
+          applicantPhoto: form.photoName,
+          bankPassbook: form.bankPassbookName,
+          otherDocument: form.otherDocName,
+        },
+        policyForm: { type: dynamicFormType, answers: dynamicAnswers },
+        addOns: selectedAddOns,
+        adminReviewStatus: "Pending Review",
       });
 
       payments.unshift({
@@ -107,13 +194,29 @@ const CheckoutPage = () => {
         purchaseId,
         invoiceNumber,
         amount: total,
-        method: paymentMethod,
+        method: enabledPaymentGateways.find((gateway) => gateway.id === paymentMethod)?.name || paymentMethod,
         status: "Success",
         createdAt: today.toISOString(),
       });
 
       save("purchases", purchases);
       save("payments", payments);
+      addUserNotification({
+        userId: user?.id || "",
+        userEmail: form.email,
+        type: "payment-received",
+        title: "Payment Received",
+        body: `Payment of ${formatInr(total)} was received through ${enabledPaymentGateways.find((gateway) => gateway.id === paymentMethod)?.name || paymentMethod}. Policy ${policyNumber} is active.`,
+        referenceId: invoiceNumber,
+      });
+      addUserNotification({
+        userId: user?.id || "",
+        userEmail: form.email,
+        type: "policy-issued",
+        title: "Policy Issued",
+        body: `Your policy ${policyNumber} has been issued for ${policy.policyName}.`,
+        referenceId: policyNumber,
+      });
 
       navigate(`/payment/success?purchaseId=${encodeURIComponent(purchaseId)}`, { replace: true });
     } catch (e) {
@@ -184,6 +287,94 @@ const CheckoutPage = () => {
               ))}
             </div>
           </div>
+
+          {dynamicPolicyFields.length || availableAddOns.length ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+                  <FileUp size={18} className="text-blue-600" />
+                  {dynamicFormType === "vehicle" ? "Vehicle policy details" : "Health policy details"}
+                </div>
+                <span className="rounded-full bg-blue-600/10 px-3 py-2 text-xs font-black text-blue-700">
+                  Admin configured
+                </span>
+              </div>
+
+              {dynamicPolicyFields.length ? (
+                <>
+                  {/* Dynamic policy form fields come from Admin > Policy Forms and are validated before payment. */}
+                  <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {dynamicPolicyFields.map((field) => (
+                      <label key={field.key} className={field.type === "textarea" ? "space-y-2 sm:col-span-2" : "space-y-2"}>
+                        <span className="text-xs font-semibold text-slate-700">
+                          {field.label}
+                          {field.required ? " *" : ""}
+                        </span>
+                        {field.type === "select" ? (
+                          <select
+                            value={dynamicAnswers[field.key] || ""}
+                            onChange={(e) => updateDynamicAnswer(field.key, e.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm outline-none focus:border-blue-500"
+                          >
+                            <option value="">Select {field.label}</option>
+                            {(dynamicSelectOptions[field.key] || ["Yes", "No"]).map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        ) : field.type === "textarea" ? (
+                          <textarea
+                            value={dynamicAnswers[field.key] || ""}
+                            onChange={(e) => updateDynamicAnswer(field.key, e.target.value)}
+                            className="min-h-28 w-full resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm outline-none focus:border-blue-500"
+                            placeholder={field.label}
+                          />
+                        ) : (
+                          <input
+                            type={field.type}
+                            value={dynamicAnswers[field.key] || ""}
+                            onChange={(e) => updateDynamicAnswer(field.key, e.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm outline-none focus:border-blue-500"
+                            placeholder={field.label}
+                          />
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+
+              {availableAddOns.length ? (
+                <div className="mt-6">
+                  {/* Add-on selections are saved with the purchase for policy issuance and future admin review. */}
+                  <div className="text-xs font-black uppercase text-slate-500">
+                    {dynamicFormType === "vehicle" ? "Vehicle Insurance Add-ons" : "Health Insurance Add-ons"}
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {availableAddOns.map((addOn) => {
+                      const active = selectedAddOns.includes(addOn);
+                      return (
+                        <button
+                          key={addOn}
+                          type="button"
+                          onClick={() => toggleAddOn(addOn)}
+                          className={[
+                            "rounded-2xl border px-4 py-3 text-left text-sm font-black shadow-sm transition",
+                            active
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-slate-200 bg-slate-50 text-slate-800 hover:bg-white",
+                          ].join(" ")}
+                        >
+                          {addOn}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
             <div className="flex items-center gap-2 text-sm font-black text-slate-900">
@@ -298,30 +489,38 @@ const CheckoutPage = () => {
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-8">
             <div className="flex items-center gap-2 text-sm font-black text-slate-900">
               <FileUp size={18} className="text-blue-600" />
-              KYC upload (mock)
+              KYC and required documents
             </div>
             <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6">
-              <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <div className="text-sm font-black text-slate-900">Upload PAN/Aadhaar (demo)</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-600">
-                    No real upload happens — we only store a filename locally.
-                  </div>
+              <div>
+                <div className="text-sm font-black text-slate-900">Upload documents for admin review</div>
+                <div className="mt-1 text-sm font-semibold text-slate-600">
+                  Backend handoff: send these files as multipart uploads to Express, then store returned document IDs.
                 </div>
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-3 text-sm font-black text-white shadow-sm hover:opacity-95">
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => update("kycDocName", e.target.files?.[0]?.name ?? "")}
-                  />
-                  Choose file
-                </label>
               </div>
-              {form.kycDocName ? (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
-                  Selected: <span className="font-black">{form.kycDocName}</span>
-                </div>
-              ) : null}
+              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {[
+                  ["aadhaarDocName", "Aadhaar card", true],
+                  ["panDocName", "PAN card", true],
+                  ["addressProofName", "Address proof", true],
+                  ["photoName", "Applicant photo", true],
+                  ["bankPassbookName", "Bank passbook", ["life", "business"].includes(dynamicFormType)],
+                  ["otherDocName", "Other required document", false],
+                ].map(([key, label, required]) => (
+                  <label key={key} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <span className="text-xs font-black text-slate-700">
+                      {label}
+                      {required ? " *" : ""}
+                    </span>
+                    <input
+                      type="file"
+                      className="mt-3 w-full text-xs font-semibold text-slate-600 file:mr-3 file:rounded-xl file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:text-xs file:font-black file:text-white"
+                      onChange={(e) => update(key, e.target.files?.[0]?.name ?? "")}
+                    />
+                    {form[key] ? <div className="mt-2 truncate text-xs font-black text-blue-700">{form[key]}</div> : null}
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -331,12 +530,7 @@ const CheckoutPage = () => {
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:rounded-[2.5rem] sm:p-6">
               <div className="text-sm font-black text-slate-900">Payment methods</div>
               <div className="mt-5 space-y-3">
-                {[
-                  { id: "upi", label: "UPI", icon: Wallet },
-                  { id: "card", label: "Credit/Debit Card", icon: CreditCard },
-                  { id: "netbanking", label: "Net Banking", icon: Landmark },
-                  { id: "wallet", label: "Wallets", icon: Building2 },
-                ].map((m) => {
+                {enabledPaymentGateways.map((m) => {
                   const Icon = m.icon;
                   const active = paymentMethod === m.id;
                   return (
@@ -360,6 +554,11 @@ const CheckoutPage = () => {
                     </button>
                   );
                 })}
+                {!enabledPaymentGateways.length ? (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm font-bold text-rose-700">
+                    No payment gateway is currently enabled.
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -380,6 +579,12 @@ const CheckoutPage = () => {
                   <span className="font-black">{formatInr(gst)}</span>
                 </div>
                 <div className="h-px bg-slate-200" />
+                {selectedAddOns.length ? (
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="text-slate-500">Selected add-ons</span>
+                    <span className="max-w-[220px] text-right text-xs font-black text-slate-900">{selectedAddOns.join(", ")}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">Total payable</span>
                   <span className="text-lg font-black text-slate-900">{formatInr(total)}</span>
@@ -393,7 +598,7 @@ const CheckoutPage = () => {
               ) : null}
 
               <button
-                disabled={busy}
+                disabled={busy || !enabledPaymentGateways.length}
                 onClick={onPay}
                 className="mt-6 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 text-sm font-black text-white shadow-sm hover:opacity-95 disabled:opacity-70"
               >

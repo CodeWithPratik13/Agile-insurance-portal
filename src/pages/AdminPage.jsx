@@ -39,13 +39,24 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import {
+  notificationTemplateDefaults,
+  paymentGatewayDefaults,
+  policyFeatureDefaults,
+  policyFormDefaults,
+  readSystemSettings as readConfiguredSystemSettings,
+  saveSystemSettings as saveConfiguredSystemSettings,
+  STORAGE_SYSTEM_SETTINGS,
+  systemConfigurationDefaults,
+} from "../utils/systemSettings";
+import { notifyClaimDecision } from "../utils/notifications";
+import { normalizeAdminPolicy, readAdminPolicies, saveAdminPolicies } from "../data/catalog";
 
 const STORAGE_USERS = "agile_insurance_users_v1";
 const STORAGE_SESSION = "agile_insurance_session_v1";
 const STORAGE_ADMINS = "agile_insurance_admins_v1";
 const STORAGE_SUPPORT_CHATS = "agile_insurance_support_chats_v1";
 const STORAGE_AUDIT_LOGS = "agile_insurance_audit_logs_v1";
-const STORAGE_SYSTEM_SETTINGS = "agile_insurance_system_settings_v1";
 const STORAGE_DOCUMENTS = "agile_insurance_documents_v1";
 
 const defaultAdminProfiles = [
@@ -172,16 +183,39 @@ const readUploadedDocuments = () => {
   }));
 };
 
+// Developer note: customer-submitted claims are stored by DashboardClaims and merged into admin review rows here.
+const readSubmittedClaims = () => {
+  const storedClaims = safeJsonParse(localStorage.getItem("agile_insurance_claims_v1"), []);
+  if (!Array.isArray(storedClaims)) return [];
+  return storedClaims.map((claim) => ({
+    id: claim.id,
+    user: claim.user || claim.fullName || "Customer",
+    email: claim.email || "",
+    policy: claim.policy || claim.type || "Policy",
+    amount: typeof claim.amount === "number" ? `INR ${claim.amount.toLocaleString("en-IN")}` : claim.amount || "INR 0",
+    status: claim.status || "Pending",
+    officer: claim.officer || "Unassigned",
+    description: claim.description || "",
+    docName: claim.docName || "",
+  }));
+};
+
+// Developer note: default demo claims are kept only when there are no real submitted claims.
+const readAdminClaims = () => {
+  const submitted = readSubmittedClaims();
+  return submitted.length ? [...submitted, ...claims.filter((claim) => !submitted.some((item) => item.id === claim.id))] : claims;
+};
+
 // Developer note: add/remove System Settings tiles here; each id should match a key in settingFieldGroups.
 const adminSettingCards = [
   { id: "general", title: "General Setting", description: "Configure the fundamental information of the site.", icon: Settings },
   { id: "branding", title: "Logo and Favicon", description: "Upload your logo and favicon here.", icon: LayoutDashboard },
-  { id: "configuration", title: "System Configuration", description: "Control all of the basic modules of the system.", icon: UserCog },
-  { id: "notifications", title: "Notification Setting", description: "Control and configure overall notification elements of the system.", icon: Bell },
-  { id: "payment", title: "Payment Gateways", description: "Configure automatic or manual payment gateways to accept payment from users.", icon: CreditCard },
+  { id: "configuration", title: "System Configuration", description: "Enable or disable core modules, portals, audit logging, and multi-hospital operations.", icon: UserCog },
+  { id: "notifications", title: "Notification Setting", description: "Manage email/SMS switches and production notification templates.", icon: Bell },
+  { id: "payment", title: "Payment Gateways", description: "Configure Razorpay, Stripe, PayPal, and Bank Transfer for checkout.", icon: CreditCard },
   { id: "withdrawals", title: "Withdrawals Methods", description: "Set up manual withdrawal methods for payout requests.", icon: KeyRound },
-  { id: "forms", title: "Policy Forms", description: "Generate forms for different policies.", icon: ClipboardCheck },
-  { id: "features", title: "Manage Features", description: "Generate features for different plans.", icon: Edit3 },
+  { id: "forms", title: "Policy Forms", description: "Build dynamic Health and Vehicle policy creation forms.", icon: ClipboardCheck },
+  { id: "features", title: "Manage Features", description: "Manage Health and Vehicle insurance add-ons.", icon: Edit3 },
   { id: "regulations", title: "Policy Regulations", description: "Define what will and will not be covered in plans.", icon: AlertTriangle },
   { id: "seo", title: "SEO Configuration", description: "Configure meta title, description, and keywords.", icon: LineChart },
   { id: "frontend", title: "Manage Frontend", description: "Control all frontend contents of the system.", icon: Smartphone },
@@ -212,21 +246,24 @@ const settingFieldGroups = {
     { name: "brandColor", label: "Brand Color", type: "color", defaultValue: "#2563eb" },
   ],
   configuration: [
-    { name: "claimsModule", label: "Claims Module", type: "boolean", defaultValue: true },
-    { name: "paymentsModule", label: "Payments Module", type: "boolean", defaultValue: true },
-    { name: "documentsModule", label: "Document Vault", type: "boolean", defaultValue: true },
-    { name: "supportModule", label: "Support Center", type: "boolean", defaultValue: true },
+    { name: "claimsModule", label: "Enable Claims Module", type: "boolean", defaultValue: systemConfigurationDefaults.claimsModule },
+    { name: "quotesModule", label: "Enable Quotes Module", type: "boolean", defaultValue: systemConfigurationDefaults.quotesModule },
+    { name: "policyRenewal", label: "Enable Policy Renewal", type: "boolean", defaultValue: systemConfigurationDefaults.policyRenewal },
+    { name: "agentPortal", label: "Enable Agent Portal", type: "boolean", defaultValue: systemConfigurationDefaults.agentPortal },
+    { name: "customerPortal", label: "Enable Customer Portal", type: "boolean", defaultValue: systemConfigurationDefaults.customerPortal },
+    { name: "emailNotifications", label: "Enable Email Notifications", type: "boolean", defaultValue: systemConfigurationDefaults.emailNotifications },
+    { name: "smsNotifications", label: "Enable SMS Notifications", type: "boolean", defaultValue: systemConfigurationDefaults.smsNotifications },
+    { name: "auditLogging", label: "Enable Audit Logging", type: "boolean", defaultValue: systemConfigurationDefaults.auditLogging },
+    { name: "multiHospitalSupport", label: "Enable Multi-Hospital Support", type: "boolean", defaultValue: systemConfigurationDefaults.multiHospitalSupport },
   ],
   notifications: [
     { name: "emailEnabled", label: "Email Notifications", type: "boolean", defaultValue: true },
     { name: "smsEnabled", label: "SMS Notifications", type: "boolean", defaultValue: true },
-    { name: "pushEnabled", label: "Push Notifications", type: "boolean", defaultValue: false },
     { name: "renewalReminderDays", label: "Renewal Reminder Days", type: "number", defaultValue: 15 },
+    { name: "templates", label: "Notification Templates", type: "templateList", defaultValue: notificationTemplateDefaults },
   ],
   payment: [
-    { name: "razorpay", label: "Razorpay Gateway", type: "boolean", defaultValue: true },
-    { name: "upi", label: "UPI Payments", type: "boolean", defaultValue: true },
-    { name: "cards", label: "Card Payments", type: "boolean", defaultValue: true },
+    { name: "gateways", label: "Gateway Configurations", type: "gatewayList", defaultValue: paymentGatewayDefaults },
     { name: "minimumPayment", label: "Minimum Payment", type: "number", defaultValue: 500 },
   ],
   withdrawals: [
@@ -236,16 +273,13 @@ const settingFieldGroups = {
     { name: "payoutNote", label: "Payout Instructions", type: "textarea", defaultValue: "Verify bank details before approving payouts." },
   ],
   forms: [
-    { name: "healthForm", label: "Health Policy Form", type: "boolean", defaultValue: true },
-    { name: "motorForm", label: "Motor Policy Form", type: "boolean", defaultValue: true },
-    { name: "lifeForm", label: "Life Policy Form", type: "boolean", defaultValue: true },
-    { name: "requiredFields", label: "Required Fields", type: "textarea", defaultValue: "Full name, phone, email, policy type, ID proof" },
+    { name: "policyForms", label: "Dynamic Policy Creation Forms", type: "policyFormBuilder", defaultValue: policyFormDefaults },
   ],
   features: [
     { name: "aiAssistant", label: "AI Assistant", type: "boolean", defaultValue: true },
     { name: "policyCompare", label: "Policy Compare", type: "boolean", defaultValue: true },
     { name: "claimTracking", label: "Claim Tracking", type: "boolean", defaultValue: true },
-    { name: "voiceSupport", label: "Voice Support", type: "boolean", defaultValue: false },
+    { name: "policyFeatures", label: "Insurance Feature Add-ons", type: "featureMatrix", defaultValue: policyFeatureDefaults },
   ],
   regulations: [
     { name: "coveredItems", label: "Covered Items", type: "textarea", defaultValue: "Hospitalization, accident damage, policy benefits, verified expenses" },
@@ -312,12 +346,33 @@ const settingFieldGroups = {
   ],
 };
 
-const policyPlans = [
+const defaultPolicyPlans = [
   { name: "Health Secure Plus", type: "Health", coverage: "INR 25L", premium: "INR 1,850/mo", duration: "1 year", state: "Active" },
   { name: "Drive Shield Elite", type: "Motor", coverage: "IDV based", premium: "INR 9,600/yr", duration: "1 year", state: "Active" },
   { name: "Term Life Max", type: "Life", coverage: "INR 1 Cr", premium: "INR 1,120/mo", duration: "30 years", state: "Draft" },
   { name: "Travel Global Care", type: "Travel", coverage: "USD 100K", premium: "INR 2,400/trip", duration: "Trip", state: "Inactive" },
 ];
+
+// Backend handoff: this adapter currently mirrors admin policy rows to localStorage; replace with Express policy APIs later.
+const readAdminPolicyRows = () => {
+  const saved = readAdminPolicies();
+  if (!saved.length) return defaultPolicyPlans;
+  return saved.map((policy) => ({
+    id: policy.id,
+    name: policy.policyName,
+    company: policy.company,
+    categorySlug: policy.categorySlug,
+    type: policy.categorySlug?.replace("-insurance", "").replace("car", "Vehicle") || "Health",
+    coverage: policy.coverageLabel,
+    premium: `INR ${policy.premiumYearly}/yr`,
+    premiumYearly: policy.premiumYearly,
+    offer: policy.aiBadge || "",
+    duration: `${policy.validityYears || 1} year`,
+    renewalDate: policy.renewalDate || "",
+    themeColor: policy.themeColor || "#2563eb",
+    state: policy.state || "Active",
+  }));
+};
 
 const claimSteps = ["Submitted", "Under Review", "Document Verification", "Approved / Rejected", "Payment Processing", "Completed"];
 
@@ -372,14 +427,9 @@ const saveAuditLogs = (logs) => {
   localStorage.setItem(STORAGE_AUDIT_LOGS, JSON.stringify(logs));
 };
 
-const readSystemSettings = () => {
-  const saved = safeJsonParse(localStorage.getItem(STORAGE_SYSTEM_SETTINGS), null);
-  return saved && typeof saved === "object" ? { modules: {}, ...saved } : { modules: {} };
-};
-
-const saveSystemSettings = (settings) => {
-  localStorage.setItem(STORAGE_SYSTEM_SETTINGS, JSON.stringify(settings));
-};
+// Developer note: AdminPage uses the shared settings utility so auth and checkout read the same switches.
+const readSystemSettings = readConfiguredSystemSettings;
+const saveSystemSettings = saveConfiguredSystemSettings;
 
 const readRealUsers = () => {
   const storedUsers = safeJsonParse(localStorage.getItem(STORAGE_USERS), []);
@@ -770,14 +820,14 @@ const AdminPage = () => {
     const realUsers = readRealUsers();
     return realUsers.length ? realUsers : users;
   });
-  const [claimRows, setClaimRows] = useState(claims);
+  const [claimRows, setClaimRows] = useState(readAdminClaims);
   const [ticketRows, setTicketRows] = useState(tickets);
   const [requirementRows, setRequirementRows] = useState(requirements);
   const [documentRows, setDocumentRows] = useState(() => {
     const uploadedDocs = readUploadedDocuments();
     return uploadedDocs.length ? [...uploadedDocs, ...documents] : documents;
   });
-  const [planRows, setPlanRows] = useState(policyPlans);
+  const [planRows, setPlanRows] = useState(readAdminPolicyRows);
   const [auditLogs, setAuditLogs] = useState(() => loadAuditLogs());
   const [systemSettings, setSystemSettings] = useState(readSystemSettings);
   const [selectedSettingId, setSelectedSettingId] = useState("general");
@@ -852,13 +902,18 @@ const AdminPage = () => {
   const editFieldsByKind = {
     users: ["name", "email", "phone", "address", "policies", "status", "city"],
     claims: ["id", "user", "policy", "amount", "status", "officer", "description", "docName"],
-    policies: ["name", "type", "coverage", "premium", "duration", "state"],
+    policies: ["name", "company", "categorySlug", "type", "coverage", "premiumYearly", "offer", "duration", "renewalDate", "themeColor", "state"],
     documents: ["type", "owner", "status", "note"],
     requirements: ["user", "age", "budget", "coverage", "status"],
     support: ["id", "user", "subject", "priority", "status"],
   };
 
   // Developer note: route shared edit/save actions to the correct local table state here.
+  const persistPolicyRows = (rows) => {
+    const adminPolicies = rows.map((row) => normalizeAdminPolicy(row)).filter((row) => row.state !== "Draft");
+    saveAdminPolicies(adminPolicies);
+  };
+
   const updateRowsForKind = (kind, updater) => {
     const setter = {
       users: setCustomerRows,
@@ -868,7 +923,12 @@ const AdminPage = () => {
       documents: setDocumentRows,
       policies: setPlanRows,
     }[kind];
-    if (setter) setter(updater);
+    if (!setter) return;
+    setter((rows) => {
+      const nextRows = typeof updater === "function" ? updater(rows) : updater;
+      if (kind === "policies") persistPolicyRows(nextRows);
+      return nextRows;
+    });
   };
 
   const startEditRecord = (kind, target) => {
@@ -986,14 +1046,22 @@ const AdminPage = () => {
 
   const createPlan = () => {
     const nextPlan = {
+      id: `admin-policy-${Date.now()}`,
       name: `New Insurance Plan ${planRows.length + 1}`,
+      company: "Agile Insurance",
+      categorySlug: "health-insurance",
       type: "Health",
-      coverage: "INR 10L",
-      premium: "INR 999/mo",
+      coverage: "₹10,00,000",
+      premium: "INR 11,988/yr",
+      premiumYearly: 11988,
+      offer: "Admin Offer",
       duration: "1 year",
+      renewalDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      themeColor: "#2563eb",
       state: "Draft",
     };
     setPlanRows((rows) => [nextPlan, ...rows]);
+    setEditingRecord({ kind: "policies", key: rowKeyFor(nextPlan), draft: { ...nextPlan } });
     addAuditLogEntry(`/api/v4/policies/create -> Initialized draft plan: ${nextPlan.name}`);
     runAction("Plan created", `${nextPlan.name} is ready for editing and approval.`);
   };
@@ -1107,7 +1175,10 @@ const AdminPage = () => {
       const rowKey = row.id || row.name || row.user || row.type;
       if (rowKey !== targetKey) return row;
       if (action === "approve") {
-        if (kind === "claims") return { ...row, status: "Approved" };
+        if (kind === "claims") {
+          notifyClaimDecision({ claimId: row.id, status: "Approved", adminName: selectedProfile.name });
+          return { ...row, status: "Approved" };
+        }
         if (kind === "documents") return { ...row, status: "Approved" };
         if (kind === "policies") return { ...row, state: "Active" };
         if (kind === "support") return { ...row, status: "Resolved" };
@@ -1125,7 +1196,11 @@ const AdminPage = () => {
       policies: setPlanRows,
     }[kind];
 
-    setter((rows) => (action === "delete" ? rows.filter(remove) : rows.map(updater)));
+    setter((rows) => {
+      const nextRows = action === "delete" ? rows.filter(remove) : rows.map(updater);
+      if (kind === "policies") persistPolicyRows(nextRows);
+      return nextRows;
+    });
     addAuditLogEntry(`/api/v4/${kind}/${action} -> Executed action on item reference key ID: ${targetKey}`);
     runAction(
       action === "delete" ? "Deleted" : "Approved",
@@ -1151,6 +1226,7 @@ const AdminPage = () => {
     if (claim.status === "Documents") missing.push("Required documents");
     const reason = missing.length ? `Missing details: ${missing.join(", ")}` : "Rejected after verification due to incomplete claim evidence";
     setClaimRows((rows) => rows.map((row) => (row.id === claim.id ? { ...row, status: "Rejected", rejectionReason: reason } : row)));
+    notifyClaimDecision({ claimId: claim.id, status: "Rejected", reason, adminName: selectedProfile.name });
     addAuditLogEntry(`/api/v4/claims/reject -> Issued fallback state negative evaluation on: ${claim.id}`);
     runAction("Claim rejected", {
       claimId: claim.id,
@@ -1182,6 +1258,14 @@ const AdminPage = () => {
     });
     addAuditLogEntry(`/api/v4/settings/update -> ${settingId}.${field.name}`);
     runAction("Setting applied", `${field.label} updated in real time.`);
+  };
+
+  // Developer note: structured setting editors use this helper to update nested template/gateway/form arrays safely.
+  const updateStructuredSetting = (settingId, field, updater, actionLabel = field.label) => {
+    const current = getSettingValue(settingId, field);
+    const nextValue = typeof updater === "function" ? updater(current) : updater;
+    updateSettingModule(settingId, field, nextValue);
+    runAction("Configuration updated", `${actionLabel} configuration has been saved locally.`);
   };
 
   const updateSettingFile = (settingId, field, file) => {
@@ -1226,6 +1310,227 @@ const AdminPage = () => {
             className="mt-2 min-h-32 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold outline-none focus:border-blue-500"
           />
         </label>
+      );
+    }
+
+    if (field.type === "templateList") {
+      const templates = Array.isArray(value) ? value : field.defaultValue;
+      return (
+        <div key={field.name} className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-black text-slate-950">{field.label}</div>
+              <div className="text-xs font-semibold text-slate-500">Policy, claim, payment, and renewal messages are editable here.</div>
+            </div>
+            <span className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">{templates.length} templates</span>
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {templates.map((template, index) => (
+              <article key={template.key} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-black text-slate-900">{template.name}</div>
+                    <div className="mt-1 text-xs font-bold text-slate-500">{template.channel}</div>
+                  </div>
+                  <Mail size={18} className="text-blue-600" />
+                </div>
+                <label className="mt-4 block">
+                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">Subject</span>
+                  <input
+                    value={template.subject}
+                    onChange={(event) =>
+                      updateStructuredSetting("notifications", field, (items) =>
+                        items.map((item, itemIndex) => (itemIndex === index ? { ...item, subject: event.target.value } : item)),
+                      )
+                    }
+                    className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-blue-500"
+                  />
+                </label>
+                <label className="mt-3 block">
+                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">Body</span>
+                  <textarea
+                    value={template.body}
+                    onChange={(event) =>
+                      updateStructuredSetting("notifications", field, (items) =>
+                        items.map((item, itemIndex) => (itemIndex === index ? { ...item, body: event.target.value } : item)),
+                      )
+                    }
+                    className="mt-2 min-h-24 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-blue-500"
+                  />
+                </label>
+              </article>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (field.type === "gatewayList") {
+      const gateways = Array.isArray(value) ? value : field.defaultValue;
+      return (
+        <div key={field.name} className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
+          <div className="text-sm font-black text-slate-950">{field.label}</div>
+          <div className="mt-1 text-xs font-semibold text-slate-500">Enabled gateways appear automatically on checkout.</div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {gateways.map((gateway, index) => (
+              <article key={gateway.key} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-black text-slate-900">{gateway.name}</div>
+                    <div className="mt-1 text-xs font-bold text-slate-500">{gateway.settlement}</div>
+                  </div>
+                  <label className="inline-flex items-center gap-2 text-xs font-black text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(gateway.enabled)}
+                      onChange={(event) =>
+                        updateStructuredSetting("payment", field, (items) =>
+                          items.map((item, itemIndex) => (itemIndex === index ? { ...item, enabled: event.target.checked } : item)),
+                        )
+                      }
+                      className="h-5 w-5 rounded border-slate-300"
+                    />
+                    {gateway.enabled ? "Enabled" : "Disabled"}
+                  </label>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">Mode</span>
+                    <select
+                      value={gateway.mode}
+                      onChange={(event) =>
+                        updateStructuredSetting("payment", field, (items) =>
+                          items.map((item, itemIndex) => (itemIndex === index ? { ...item, mode: event.target.value } : item)),
+                        )
+                      }
+                      className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-blue-500"
+                    >
+                      {["Test", "Live", "Sandbox", "Manual"].map((option) => <option key={option}>{option}</option>)}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">Merchant ID</span>
+                    <input
+                      value={gateway.merchantId}
+                      onChange={(event) =>
+                        updateStructuredSetting("payment", field, (items) =>
+                          items.map((item, itemIndex) => (itemIndex === index ? { ...item, merchantId: event.target.value } : item)),
+                        )
+                      }
+                      className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-blue-500"
+                    />
+                  </label>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (field.type === "policyFormBuilder") {
+      const forms = value && typeof value === "object" ? value : field.defaultValue;
+      return (
+        <div key={field.name} className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
+          <div className="text-sm font-black text-slate-950">{field.label}</div>
+          <div className="mt-1 text-xs font-semibold text-slate-500">Health and Vehicle fields can be renamed, typed, required, and extended.</div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {Object.entries(forms).map(([formKey, fields]) => (
+              <article key={formKey} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-black capitalize text-slate-900">{formKey} Policy</div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateStructuredSetting("forms", field, (currentForms) => ({
+                        ...currentForms,
+                        [formKey]: [
+                          ...(currentForms[formKey] || []),
+                          { key: `customField${Date.now()}`, label: "New Field", type: "text", required: false },
+                        ],
+                      }))
+                    }
+                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-black text-white hover:bg-blue-700"
+                  >
+                    <Plus size={14} />
+                    Add Field
+                  </button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {fields.map((formField, index) => (
+                    <div key={formField.key} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
+                        <input
+                          value={formField.label}
+                          onChange={(event) =>
+                            updateStructuredSetting("forms", field, (currentForms) => ({
+                              ...currentForms,
+                              [formKey]: currentForms[formKey].map((item, itemIndex) => (itemIndex === index ? { ...item, label: event.target.value } : item)),
+                            }))
+                          }
+                          className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold outline-none focus:border-blue-500"
+                        />
+                        <select
+                          value={formField.type}
+                          onChange={(event) =>
+                            updateStructuredSetting("forms", field, (currentForms) => ({
+                              ...currentForms,
+                              [formKey]: currentForms[formKey].map((item, itemIndex) => (itemIndex === index ? { ...item, type: event.target.value } : item)),
+                            }))
+                          }
+                          className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold outline-none focus:border-blue-500"
+                        >
+                          {["text", "number", "select", "date", "textarea"].map((option) => <option key={option}>{option}</option>)}
+                        </select>
+                        <label className="inline-flex h-10 items-center gap-2 text-xs font-black text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(formField.required)}
+                            onChange={(event) =>
+                              updateStructuredSetting("forms", field, (currentForms) => ({
+                                ...currentForms,
+                                [formKey]: currentForms[formKey].map((item, itemIndex) => (itemIndex === index ? { ...item, required: event.target.checked } : item)),
+                              }))
+                            }
+                            className="h-4 w-4 rounded border-slate-300"
+                          />
+                          Required
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (field.type === "featureMatrix") {
+      const featureGroups = value && typeof value === "object" ? value : field.defaultValue;
+      return (
+        <div key={field.name} className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
+          <div className="text-sm font-black text-slate-950">{field.label}</div>
+          <div className="mt-1 text-xs font-semibold text-slate-500">Add-ons are stored by insurance line and ready for plan mapping.</div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {Object.entries(featureGroups).map(([groupKey, features]) => (
+              <article key={groupKey} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm font-black capitalize text-slate-900">{groupKey} Insurance</div>
+                <textarea
+                  value={features.join("\n")}
+                  onChange={(event) =>
+                    updateStructuredSetting("features", field, (groups) => ({
+                      ...groups,
+                      [groupKey]: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean),
+                    }))
+                  }
+                  className="mt-3 min-h-36 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-blue-500"
+                />
+              </article>
+            ))}
+          </div>
+        </div>
       );
     }
 
@@ -1676,7 +1981,10 @@ const AdminPage = () => {
       return (
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <SectionTitle icon={FileText} title="Policy Management" action={<button onClick={createPlan} className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white transition hover:bg-blue-700"><Plus size={16} />Create Plan</button>} />
-          <DataTable columns={["name", "type", "coverage", "premium", "duration", "state"]} rows={planRows} renderActions={(row) => actionButtons(row, "policies")} />
+          <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800">
+            Admin-created active policies are saved to the shared catalog and become visible on public product pages.
+          </div>
+          <DataTable columns={["name", "company", "categorySlug", "coverage", "premiumYearly", "offer", "renewalDate", "state"]} rows={planRows} renderActions={(row) => actionButtons(row, "policies")} />
         </section>
       );
     }

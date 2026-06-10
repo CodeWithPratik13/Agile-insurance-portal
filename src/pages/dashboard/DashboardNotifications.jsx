@@ -1,14 +1,23 @@
 import { useMemo } from "react";
 import { Bell, ShieldCheck, Sparkles } from "lucide-react";
 import { load } from "../../utils/storage";
+import { useAuth } from "../../contexts/useAuth";
+import { readUserNotifications } from "../../utils/notifications";
 
 // Notification titles, alert body text, and empty/default notification copy are generated here.
 const DashboardNotifications = () => {
+  const { user } = useAuth();
   const purchases = useMemo(() => load("purchases", []), []);
   const claims = useMemo(() => load("claims", []), []);
+  const storedNotifications = useMemo(() => readUserNotifications(user), [user]);
 
   const items = useMemo(() => {
-    const list = [];
+    const list = storedNotifications.map((item) => ({
+      ...item,
+      body: item.body,
+      title: item.title,
+      createdAt: item.createdAt,
+    }));
     if (!purchases.length) {
       list.push({ type: "offer", title: "Welcome offer", body: "Explore Health Insurance plans with AI recommendations." });
     }
@@ -32,7 +41,7 @@ const DashboardNotifications = () => {
       body: "Agile Insurance monitors claim and policy activity for important account alerts.",
     });
     return list;
-  }, [purchases, claims]);
+  }, [purchases, claims, storedNotifications]);
 
   return (
     <div className="space-y-8">
@@ -66,6 +75,11 @@ const DashboardNotifications = () => {
                     {n.title}
                   </div>
                   <div className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{n.body}</div>
+                  {n.createdAt ? (
+                    <div className="mt-2 text-xs font-bold text-slate-500 dark:text-slate-400">
+                      {new Date(n.createdAt).toLocaleString()}
+                    </div>
+                  ) : null}
                 </div>
                 <span className="inline-flex items-center gap-2 rounded-full bg-indigo-600/10 px-3 py-2 text-xs font-black text-indigo-700 dark:text-indigo-300">
                   <Sparkles size={14} />
