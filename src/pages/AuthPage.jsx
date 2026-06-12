@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { KeyRound, Lock, Mail, MapPin, Phone, ShieldCheck, User } from "lucide-react";
+import { Lock, Mail, MapPin, Phone, ShieldCheck, User } from "lucide-react";
 import { useAuth } from "../contexts/useAuth";
-import { getModuleSetting } from "../utils/systemSettings";
 
-// Authentication screen copy, field labels, validation messages, and auth CTAs live in this file.
+// Frontend-only authentication screen.
+// Backend team: connect form submit handlers to real register/login/OTP/social-auth APIs in AuthContext.jsx.
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
 
 const getSafeReturnTo = (value) => {
@@ -15,9 +15,6 @@ const getSafeReturnTo = (value) => {
 
   return value;
 };
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const GOOGLE_SCRIPT_ID = "google-identity-services";
 
 const GoogleLogo = () => (
   <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden="true">
@@ -31,8 +28,7 @@ const GoogleLogo = () => (
 const AuthPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { register, verifyOtp, login, googleLogin, isAuthenticated, bootstrapped } = useAuth();
-  const googleTokenClientRef = useRef(null);
+  const { register, login, googleLogin, isAuthenticated, bootstrapped } = useAuth();
 
   const returnTo = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -49,7 +45,6 @@ const AuthPage = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [otpStep, setOtpStep] = useState(false);
 
   // Developer note: registration fields live here; keep these in sync with AuthContext.register().
   const [fullName, setFullName] = useState("");
@@ -58,12 +53,11 @@ const AuthPage = () => {
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  // Authentication feature gates are controlled from Admin > System Settings.
-  const customerPortalEnabled = getModuleSetting("configuration", "customerPortal", true);
-  const googleLoginEnabled = getModuleSetting("social", "googleLogin", true);
+  // Backend team: replace these constants with feature flags from the backend if needed.
+  const customerPortalEnabled = true;
+  const googleLoginEnabled = true;
 
   const resetMessaging = () => {
     setError("");
@@ -83,20 +77,6 @@ const AuthPage = () => {
     const trimmedPhone = phone.trim();
     const trimmedAddress = address.trim();
 
-    if (mode === "register" && otpStep) {
-      if (!/^\d{6}$/.test(otp.trim())) return setError("Enter the 6-digit OTP.");
-      setBusy(true);
-      try {
-        await verifyOtp({ email: trimmedEmail, otp: otp.trim() });
-        navigate(returnTo, { replace: true });
-      } catch (err) {
-        setError(err?.message || "OTP verification failed.");
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-
     if (mode === "register") {
       // Developer note: add validation for any future registration fields in this block.
       if (!trimmedName) return setError("Full Name is required.");
@@ -107,9 +87,8 @@ const AuthPage = () => {
       if (password !== confirmPassword) return setError("Passwords do not match.");
       setBusy(true);
       try {
-        const response = await register({ fullName: trimmedName, email: trimmedEmail, phone: trimmedPhone, address: trimmedAddress, password });
-        setOtpStep(true);
-        setNotice(response.message || "A fresh 6-digit OTP was sent to your email. Enter it below to verify your account.");
+        await register({ fullName: trimmedName, email: trimmedEmail, phone: trimmedPhone, address: trimmedAddress, password });
+        navigate(returnTo, { replace: true });
       } catch (err) {
         setError(err?.message || "Registration failed.");
       } finally {
@@ -131,16 +110,11 @@ const AuthPage = () => {
     }
   };
 
-  const onGoogleAccessToken = async (response) => {
+  const onGoogleLogin = async () => {
     resetMessaging();
-    const accessToken = response?.access_token;
-    if (!accessToken) {
-      setError("Select a Google account to continue.");
-      return;
-    }
     setBusy(true);
     try {
-      await googleLogin({ accessToken });
+      await googleLogin();
       navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err?.message || "Google sign-in failed.");
@@ -149,52 +123,8 @@ const AuthPage = () => {
     }
   };
 
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || !googleLoginEnabled) return;
-
-    const initializeGoogleTokenClient = () => {
-      if (!window.google?.accounts?.oauth2) return;
-      googleTokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: "openid email profile",
-        prompt: "select_account",
-        callback: onGoogleAccessToken,
-      });
-    };
-
-    const existing = document.getElementById(GOOGLE_SCRIPT_ID);
-    if (existing) {
-      initializeGoogleTokenClient();
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = GOOGLE_SCRIPT_ID;
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = initializeGoogleTokenClient;
-    script.onerror = () => setError("Could not load Google sign-in. Check your connection and try again.");
-    document.head.appendChild(script);
-  }, [googleLoginEnabled]);
-
-  const onGoogleLogin = () => {
-    resetMessaging();
-    if (!googleLoginEnabled) {
-      setError("Google sign-in is disabled by the administrator.");
-      return;
-    }
-    if (!googleTokenClientRef.current) {
-      setError("Google sign-in is still loading. Please try again in a moment.");
-      return;
-    }
-    googleTokenClientRef.current.requestAccessToken({ prompt: "select_account" });
-  };
-
   const switchMode = (nextMode) => {
     setMode(nextMode);
-    setOtpStep(false);
-    setOtp("");
     resetMessaging();
   };
 
@@ -228,15 +158,13 @@ const AuthPage = () => {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700">
                 <ShieldCheck size={16} className="text-blue-600" />
-                Secure access - OTP verified
+                Frontend access preview
               </div>
               <h1 className="mt-5 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-                {mode === "register" ? (otpStep ? "Verify your email" : "Create your account") : "Welcome back"}
+                {mode === "register" ? "Create your account" : "Welcome back"}
               </h1>
               <p className="mt-2 text-sm text-slate-600 sm:text-base">
-                {otpStep
-                  ? "Enter the 6-digit OTP sent to your email address to finish account verification."
-                  : "Frontend-only authentication, document vault, and connected dashboard state."}
+                Use any email and password to preview the dashboard UI. Backend team can replace this with real auth.
               </p>
               {!customerPortalEnabled ? (
                 <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
@@ -249,7 +177,7 @@ const AuthPage = () => {
 
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
             {/* Developer note: add future account-create fields near this section and pass them to register(). */}
-            {mode === "register" && !otpStep && (
+            {mode === "register" && (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <label className="space-y-2">
                   <span className="text-xs font-semibold text-slate-700">Full Name</span>
@@ -280,7 +208,7 @@ const AuthPage = () => {
               </div>
             )}
 
-            {mode === "register" && !otpStep && (
+            {mode === "register" && (
               <label className="block space-y-2">
                 <span className="text-xs font-semibold text-slate-700">Address</span>
                 <div className="relative">
@@ -295,43 +223,40 @@ const AuthPage = () => {
               </label>
             )}
 
-            {!otpStep && (
-              <label className="block space-y-2">
-                <span className="text-xs font-semibold text-slate-700">Email</span>
+            <label className="block space-y-2">
+              <span className="text-xs font-semibold text-slate-700">Email</span>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-4 text-sm font-medium text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-500"
+                  placeholder="you@company.com"
+                />
+              </div>
+            </label>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-xs font-semibold text-slate-700">Password</span>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-4 text-sm font-medium text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-500"
-                    placeholder="you@company.com"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    type={showPassword ? "text" : "password"}
+                    className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-12 pr-20 text-sm font-medium text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-500"
+                    placeholder="Password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50"
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
                 </div>
               </label>
-            )}
-
-            {!otpStep && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold text-slate-700">Password</span>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      type={showPassword ? "text" : "password"}
-                      className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-12 pr-20 text-sm font-medium text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-500"
-                      placeholder="Password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50"
-                    >
-                      {showPassword ? "Hide" : "Show"}
-                    </button>
-                  </div>
-                </label>
 
                 {mode === "register" ? (
                   <label className="space-y-2">
@@ -361,24 +286,7 @@ const AuthPage = () => {
                     </Link>
                   </div>
                 )}
-              </div>
-            )}
-
-            {mode === "register" && otpStep && (
-              <label className="block space-y-2">
-                <span className="text-xs font-semibold text-slate-700">Email verification OTP</span>
-                <div className="relative">
-                  <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/[^\d]/g, "").slice(0, 6))}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-12 py-4 text-sm font-medium text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-500"
-                    placeholder="6-digit code"
-                    inputMode="numeric"
-                  />
-                </div>
-              </label>
-            )}
+            </div>
 
             {notice && (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
@@ -396,22 +304,8 @@ const AuthPage = () => {
               disabled={busy || !customerPortalEnabled}
               className="relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 text-sm font-bold text-white shadow-sm transition hover:opacity-95 disabled:opacity-70"
             >
-              {busy ? "Securing your portal..." : mode === "register" ? (otpStep ? "Verify OTP" : "Create Account") : "Login"}
+              {busy ? "Opening portal..." : mode === "register" ? "Create Account" : "Login"}
             </button>
-
-            {mode === "register" && otpStep && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOtpStep(false);
-                  setOtp("");
-                  resetMessaging();
-                }}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                Edit registration details
-              </button>
-            )}
 
             <div className="border-t border-slate-200 pt-4">
               <div className="mb-3 flex items-center gap-3">
@@ -419,7 +313,7 @@ const AuthPage = () => {
                 <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">or</span>
                 <div className="h-px flex-1 bg-slate-200" />
               </div>
-              {GOOGLE_CLIENT_ID && googleLoginEnabled ? (
+              {googleLoginEnabled ? (
                 <button
                   type="button"
                   onClick={onGoogleLogin}
@@ -427,7 +321,7 @@ const AuthPage = () => {
                   className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-70"
                 >
                   <GoogleLogo />
-                  Continue with Google
+                  Continue with Google Preview
                 </button>
               ) : !googleLoginEnabled ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
@@ -435,7 +329,7 @@ const AuthPage = () => {
                 </div>
               ) : (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                  Google sign-in needs VITE_GOOGLE_CLIENT_ID before users can select a Google account.
+                  Google sign-in will be connected by backend team.
                 </div>
               )}
             </div>

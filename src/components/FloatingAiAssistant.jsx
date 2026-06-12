@@ -4,7 +4,7 @@ import { Bot, SendHorizonal, Sparkles, X } from "lucide-react";
 import { openAiChat } from "../utils/api";
 import { buildAssistantKnowledge } from "../utils/assistantKnowledge";
 
-// Floating AI widget copy and OpenAI chat handoff live here.
+// Floating AI widget copy and backend chat handoff live here.
 const makeId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
 const FloatingAiAssistant = ({ contextLabel = "Agile AI", prompt = null }) => {
@@ -53,7 +53,7 @@ const FloatingAiAssistant = ({ contextLabel = "Agile AI", prompt = null }) => {
     } finally {
       setBusy(false);
     }
-  }, [busy, messages]);
+  }, [busy, contextLabel, messages]);
 
   useEffect(() => {
     const cleanPrompt = String(prompt?.text || "").trim();
@@ -92,7 +92,7 @@ const FloatingAiAssistant = ({ contextLabel = "Agile AI", prompt = null }) => {
           </span>
           <span className="hidden sm:inline">AI Support</span>
           <span className="hidden text-white/80 sm:inline">-</span>
-          <span className="hidden text-xs font-semibold text-white/85 sm:inline">OpenAI powered</span>
+          <span className="hidden text-xs font-semibold text-white/85 sm:inline">Frontend preview</span>
         </button>
       </div>
 

@@ -1,22 +1,13 @@
-// Local-storage helpers used by demo checkout/dashboard data.
-const safeJsonParse = (value, fallback) => {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-};
-
-const ns = (key) => `agile_insurance_${key}_v1`;
+// UI-only in-memory state helper. Data resets when the page reloads.
+const memoryStore = new Map();
 
 export const load = (key, fallback) => {
-  const raw = localStorage.getItem(ns(key));
-  if (!raw) return fallback;
-  return safeJsonParse(raw, fallback);
+  if (!memoryStore.has(key)) return fallback;
+  return memoryStore.get(key);
 };
 
 export const save = (key, value) => {
-  localStorage.setItem(ns(key), JSON.stringify(value));
+  memoryStore.set(key, value);
 };
 
 export const uid = (prefix) => `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now()}`;

@@ -46,18 +46,13 @@ import {
   policyFormDefaults,
   readSystemSettings as readConfiguredSystemSettings,
   saveSystemSettings as saveConfiguredSystemSettings,
-  STORAGE_SYSTEM_SETTINGS,
   systemConfigurationDefaults,
 } from "../utils/systemSettings";
 import { notifyClaimDecision } from "../utils/notifications";
 import { normalizeAdminPolicy, readAdminPolicies, saveAdminPolicies } from "../data/catalog";
+import { randomDigits } from "../utils/ids";
 
-const STORAGE_USERS = "agile_insurance_users_v1";
-const STORAGE_SESSION = "agile_insurance_session_v1";
-const STORAGE_ADMINS = "agile_insurance_admins_v1";
-const STORAGE_SUPPORT_CHATS = "agile_insurance_support_chats_v1";
-const STORAGE_AUDIT_LOGS = "agile_insurance_audit_logs_v1";
-const STORAGE_DOCUMENTS = "agile_insurance_documents_v1";
+const makeUiId = (prefix, length = 6) => `${prefix}${randomDigits(length)}`;
 
 const defaultAdminProfiles = [
   {
@@ -169,36 +164,10 @@ const documents = [
 
 // Developer note: user uploads from DashboardDocuments are normalized here for admin review/markup.
 // Add new document metadata here if the user-side vault stores more fields later.
-const readUploadedDocuments = () => {
-  const uploadedDocs = safeJsonParse(localStorage.getItem(STORAGE_DOCUMENTS), []);
-  if (!Array.isArray(uploadedDocs)) return [];
-  return uploadedDocs.map((doc, index) => ({
-    id: doc.id || `UPDOC-${index + 1}`,
-    type: doc.name || doc.type || "Uploaded Document",
-    owner: doc.owner || "Registered User",
-    status: doc.status || "Pending",
-    note: doc.createdAt ? `Uploaded ${new Date(doc.createdAt).toLocaleString()}` : "Uploaded by user",
-    dataUrl: doc.dataUrl || "",
-    mimeType: doc.mimeType || "",
-  }));
-};
+const readUploadedDocuments = () => [];
 
 // Developer note: customer-submitted claims are stored by DashboardClaims and merged into admin review rows here.
-const readSubmittedClaims = () => {
-  const storedClaims = safeJsonParse(localStorage.getItem("agile_insurance_claims_v1"), []);
-  if (!Array.isArray(storedClaims)) return [];
-  return storedClaims.map((claim) => ({
-    id: claim.id,
-    user: claim.user || claim.fullName || "Customer",
-    email: claim.email || "",
-    policy: claim.policy || claim.type || "Policy",
-    amount: typeof claim.amount === "number" ? `INR ${claim.amount.toLocaleString("en-IN")}` : claim.amount || "INR 0",
-    status: claim.status || "Pending",
-    officer: claim.officer || "Unassigned",
-    description: claim.description || "",
-    docName: claim.docName || "",
-  }));
-};
+const readSubmittedClaims = () => [];
 
 // Developer note: default demo claims are kept only when there are no real submitted claims.
 const readAdminClaims = () => {
@@ -386,82 +355,41 @@ const pageTitles = {
   documents: "Document Verification",
   notifications: "Notification Center",
   reports: "Reports & Analytics",
+  "report-detail": "Report Detail",
   profile: "Admin Profile",
   auditlog: "Audit Log",
   settings: "System Settings",
   "setting-detail": "System Setting",
 };
 
-const safeJsonParse = (value, fallback) => {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-};
+const loadAdmins = () => defaultAdminProfiles;
 
-const loadAdmins = () => {
-  const saved = safeJsonParse(localStorage.getItem(STORAGE_ADMINS), null);
-  return Array.isArray(saved) && saved.length ? saved : defaultAdminProfiles;
-};
+const saveAdmins = () => {};
 
-const saveAdmins = (admins) => {
-  localStorage.setItem(STORAGE_ADMINS, JSON.stringify(admins));
-};
+const readSupportChats = () => [];
 
-const readSupportChats = () => {
-  const chats = safeJsonParse(localStorage.getItem(STORAGE_SUPPORT_CHATS), []);
-  return Array.isArray(chats) ? chats : [];
-};
+const saveSupportChats = () => {};
 
-const saveSupportChats = (chats) => {
-  localStorage.setItem(STORAGE_SUPPORT_CHATS, JSON.stringify(chats));
-};
+const loadAuditLogs = () => defaultAuditLogs;
 
-const loadAuditLogs = () => {
-  const saved = safeJsonParse(localStorage.getItem(STORAGE_AUDIT_LOGS), null);
-  return Array.isArray(saved) && saved.length ? saved : defaultAuditLogs;
-};
-
-const saveAuditLogs = (logs) => {
-  localStorage.setItem(STORAGE_AUDIT_LOGS, JSON.stringify(logs));
-};
+const saveAuditLogs = () => {};
 
 // Developer note: AdminPage uses the shared settings utility so auth and checkout read the same switches.
 const readSystemSettings = readConfiguredSystemSettings;
 const saveSystemSettings = saveConfiguredSystemSettings;
 
-const readRealUsers = () => {
-  const storedUsers = safeJsonParse(localStorage.getItem(STORAGE_USERS), []);
-  const session = safeJsonParse(localStorage.getItem(STORAGE_SESSION), null);
-  const users = Array.isArray(storedUsers) ? storedUsers : [];
-  const sessionUser = session?.user;
-  const merged = sessionUser && !users.some((user) => user.id === sessionUser.id) ? [...users, sessionUser] : users;
-
-  return merged.map((user, index) => ({
-    id: user.id || `USR-${index + 1}`,
-    name: user.fullName || user.name || "Customer",
-    email: user.email || "not-provided@agile.demo",
-    phone: user.phone || "Not added",
-    address: user.address || "Not added",
-    policies: user.policyCount ?? 0,
-    status: sessionUser?.id === user.id ? "Logged In" : "Active",
-    city: user.city || "Not added",
-    profilePhoto: user.profilePhoto || "",
-  }));
-};
+const readRealUsers = () => [];
 
 const readUserActivity = (user, adminClaims = []) => {
-  const purchases = safeJsonParse(localStorage.getItem("agile_insurance_purchases_v1"), []);
-  const claimsData = safeJsonParse(localStorage.getItem("agile_insurance_claims_v1"), []);
-  const payments = safeJsonParse(localStorage.getItem("agile_insurance_payments_v1"), []);
-  const documentsData = safeJsonParse(localStorage.getItem("agile_insurance_documents_v1"), []);
-  const allClaims = [...(Array.isArray(claimsData) ? claimsData : []), ...adminClaims].filter((claim) => {
+  const purchases = [];
+  const payments = [];
+  const documentsData = [];
+  const allClaims = adminClaims.filter((claim) => {
     const claimUser = claim.user || claim.fullName || claim.name || "";
     const claimEmail = claim.email || "";
     return claimUser === user.name || claimEmail === user.email;
   });
-  const allDocuments = Array.isArray(documentsData) ? documentsData : [];
+  const allDocuments = documentsData;
 
   return {
     profile: user.name,
@@ -633,10 +561,11 @@ const AdminLogin = ({ adminProfiles, selectedProfile, setSelectedProfile, onLogi
             className="mt-8 space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (adminId !== selectedProfile.adminId || password !== selectedProfile.password) {
-                setError("Invalid admin ID or password for the selected profile.");
+              if (!adminId.trim() || !password.trim()) {
+                setError("Enter any admin ID/email and password to preview the admin UI.");
                 return;
               }
+              // Frontend-only preview: backend team should replace this with admin auth API validation.
               onLogin();
             }}
           >
@@ -821,7 +750,7 @@ const AdminPage = () => {
     return realUsers.length ? realUsers : users;
   });
   const [claimRows, setClaimRows] = useState(readAdminClaims);
-  const [ticketRows, setTicketRows] = useState(tickets);
+  const [, setTicketRows] = useState(tickets);
   const [requirementRows, setRequirementRows] = useState(requirements);
   const [documentRows, setDocumentRows] = useState(() => {
     const uploadedDocs = readUploadedDocuments();
@@ -840,6 +769,7 @@ const AdminPage = () => {
   const [selectedChat, setSelectedChat] = useState(null);
   const [adminReply, setAdminReply] = useState("");
   const [editingRecord, setEditingRecord] = useState(null);
+  const [selectedReport, setSelectedReport] = useState(null);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [documentMarks, setDocumentMarks] = useState({});
   const [markupTool, setMarkupTool] = useState("pen");
@@ -855,7 +785,7 @@ const AdminPage = () => {
 
   const addAuditLogEntry = (actionString) => {
     const nextLog = {
-      id: `LOG-${Date.now().toString().slice(-4)}`,
+      id: makeUiId("LOG-", 4),
       action: actionString,
       username: selectedProfile?.email || "system-account",
       initials: selectedProfile?.initials || "SYS",
@@ -890,6 +820,8 @@ const AdminPage = () => {
   const openPage = (page) => {
     setActivePage(page);
     setMobileOpen(false);
+    setEditingRecord(null);
+    setSelectedReport(null);
     setDetail({ title: pageTitles[page], body: `You opened ${pageTitles[page]} as ${selectedProfile.role}.`, photo: "" });
   };
 
@@ -1029,7 +961,7 @@ const AdminPage = () => {
 
   const createCustomer = () => {
     const nextUser = {
-      id: `USR${Date.now().toString().slice(-5)}`,
+      id: makeUiId("USR", 5),
       name: "New Customer",
       email: `customer${customerRows.length + 1}@agile.demo`,
       phone: "Not added",
@@ -1045,8 +977,10 @@ const AdminPage = () => {
   };
 
   const createPlan = () => {
+    const nextYear = new Date();
+    nextYear.setFullYear(nextYear.getFullYear() + 1);
     const nextPlan = {
-      id: `admin-policy-${Date.now()}`,
+      id: makeUiId("admin-policy-", 8),
       name: `New Insurance Plan ${planRows.length + 1}`,
       company: "Agile Insurance",
       categorySlug: "health-insurance",
@@ -1056,7 +990,7 @@ const AdminPage = () => {
       premiumYearly: 11988,
       offer: "Admin Offer",
       duration: "1 year",
-      renewalDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      renewalDate: nextYear.toISOString().slice(0, 10),
       themeColor: "#2563eb",
       state: "Draft",
     };
@@ -1067,8 +1001,9 @@ const AdminPage = () => {
   };
 
   const createClaim = () => {
+    const year = new Date().getFullYear();
     const nextClaim = {
-      id: `CLM${Date.now().toString().slice(-4)}`,
+      id: `CLM-${year}-${randomDigits(8)}`,
       user: customerRows[0]?.name || "New Customer",
       email: customerRows[0]?.email || "not-provided@agile.demo",
       phone: customerRows[0]?.phone || "Not added",
@@ -1083,19 +1018,6 @@ const AdminPage = () => {
     setEditingRecord({ kind: "claims", key: rowKeyFor(nextClaim), draft: { ...nextClaim } });
     addAuditLogEntry(`/api/v4/claims/create -> Opened claim sheet: ${nextClaim.id}`);
     runAction("Claim created", `${nextClaim.id} was created. Add or edit customer name, policy, amount, documents, and notes before sending.`);
-  };
-
-  const createTicket = () => {
-    const nextTicket = {
-      id: `TKT${Date.now().toString().slice(-4)}`,
-      // FIX 6: customerRows is an array, use customerRows[0]?.name
-      user: customerRows[0]?.name || "Customer",
-      subject: "New support query",
-      priority: "Medium",
-      status: "Open",
-    };
-    setTicketRows((rows) => [nextTicket, ...rows]);
-    runAction("Ticket created", `${nextTicket.id} is open.`);
   };
 
   const createRequirement = () => {
@@ -1656,6 +1578,24 @@ const AdminPage = () => {
 
   const visibleAuditLogs = auditLogs.filter((log) => (auditFilter === "login" ? isLoginAudit(log) : !isLoginAudit(log)));
 
+  const formatAuditActionLabel = (action) => {
+    const [, rawAction = action] = String(action).split("->").map((part) => part.trim());
+    const endpoint = String(action).split("->")[0] || "";
+    const endpointParts = endpoint.split("/").filter(Boolean);
+    const moduleName = endpointParts[2] || endpointParts[1] || "system";
+    const operationName = endpointParts[3] || "activity";
+    const readableModule = moduleName.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+    const readableOperation = operationName.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+    return `${readableModule} ${readableOperation}: ${rawAction}`;
+  };
+
+  const openReportDetail = (report) => {
+    setSelectedReport(report);
+    setEditingRecord(null);
+    setActivePage("report-detail");
+    setDetail({ title: report, body: `${report} opened with current admin data.`, photo: "" });
+  };
+
   const renderDashboard = () => (
     <div className="space-y-6">
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -2132,15 +2072,32 @@ const AdminPage = () => {
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <SectionTitle icon={Bell} title="Notification Center" />
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            {["Policy Expiry", "Claim Status", "Payment Reminder", "New Offers"].map((type) => (
-              <button key={type} onClick={() => runAction("Notification template", `${type} notification template selected.`)} className="rounded-lg border border-slate-200 p-4 text-left font-black hover:bg-slate-50">{type}</button>
+            {["Policy Issued", "Policy Approved", "Claim Submitted", "Claim Approved", "Claim Rejected", "Payment Received", "Renewal Reminder"].map((type) => (
+              <button
+                key={type}
+                onClick={() => {
+                  addAuditLogEntry(`/api/v4/notifications/template -> Selected notification template: ${type}`);
+                  runAction("Notification template", `${type} template is ready to edit or send from the selected channel.`);
+                }}
+                className="rounded-lg border border-slate-200 p-4 text-left font-black transition hover:border-blue-200 hover:bg-blue-50"
+              >
+                {type}
+              </button>
             ))}
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
             {["Email", "SMS", "Push Notifications"].map((channel) => (
               <button key={channel} onClick={() => runAction("Channel selected", `${channel} channel enabled.`)} className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">{channel}</button>
             ))}
-            <button onClick={() => runAction("Notification sent", "Selected notification has been queued.")} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-black text-white"><Send size={15} />Send</button>
+            <button
+              onClick={() => {
+                addAuditLogEntry(`/api/v4/notifications/send -> Queued notification broadcast from admin center`);
+                runAction("Notification sent", "Selected notification has been queued for active users.");
+              }}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-black text-white"
+            >
+              <Send size={15} />Send
+            </button>
           </div>
         </section>
       );
@@ -2151,7 +2108,7 @@ const AdminPage = () => {
           <SectionTitle icon={BarChart3} title="Reports & Analytics" />
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {["Claims Report", "Revenue Report", "User Growth Report", "Policy Sales Report", "Agent Performance Report"].map((report) => (
-              <button key={report} onClick={() => runAction("Report opened", `${report} opened.`)} className="rounded-lg border border-slate-200 p-4 text-left font-black hover:bg-slate-50">{report}</button>
+              <button key={report} onClick={() => openReportDetail(report)} className="rounded-lg border border-slate-200 p-4 text-left font-black transition hover:border-blue-200 hover:bg-blue-50">{report}</button>
             ))}
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
@@ -2330,8 +2287,9 @@ const AdminPage = () => {
                   return (
                     <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3.5 text-xs font-black text-slate-400">{index + 1}</td>
-                      <td className="px-4 py-3.5 font-mono text-xs font-semibold text-blue-900 max-w-xs truncate">
-                        {log.action}
+                      <td className="px-4 py-3.5 text-xs font-semibold text-blue-900 max-w-xs">
+                        <div className="truncate font-black">{formatAuditActionLabel(log.action)}</div>
+                        <div className="mt-1 truncate font-mono text-[11px] text-slate-400">{log.action}</div>
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
@@ -2373,6 +2331,48 @@ const AdminPage = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </section>
+      );
+    }
+    if (activePage === "report-detail") {
+      const report = selectedReport || "Analytics Report";
+      const reportStats = [
+        { label: "Total Users", value: customerRows.length },
+        { label: "Policies", value: planRows.length },
+        { label: "Claims", value: claimRows.length },
+        { label: "Payments", value: "INR 8.42 Cr" },
+      ];
+      return (
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <SectionTitle
+            icon={BarChart3}
+            title={report}
+            action={
+              <button onClick={() => openPage("reports")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+                <ArrowLeft size={16} />
+                Back to Reports
+              </button>
+            }
+          />
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {reportStats.map((item) => (
+              <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xs font-black uppercase text-slate-500">{item.label}</div>
+                <div className="mt-2 text-2xl font-black text-slate-950">{item.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 rounded-lg border border-slate-200 bg-white p-5">
+            <SectionTitle icon={LineChart} title={`${report} Trend`} />
+            <div className="mt-5">
+              <LineSpark values={[32, 48, 44, 61, 58, 73, 69, 82, 78, 88, 84, 96]} color="#2563eb" />
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {["PDF", "Excel", "CSV"].map((format) => (
+              <button key={format} onClick={() => runAction("Export ready", `${report} ${format} export generated.`)} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-black hover:bg-slate-50"><Download size={15} />{format}</button>
+            ))}
           </div>
         </section>
       );

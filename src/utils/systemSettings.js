@@ -1,5 +1,4 @@
-// Production configuration defaults for admin settings and customer-facing feature gates.
-export const STORAGE_SYSTEM_SETTINGS = "agile_insurance_system_settings_v1";
+// UI-only configuration defaults for admin settings and customer-facing feature gates.
 
 // System module flags control which major insurance workflows are available in the portal.
 export const systemConfigurationDefaults = {
@@ -83,53 +82,33 @@ export const policyFeatureDefaults = {
   business: ["Fire Cover", "Cyber Liability", "Employee Protection"],
 };
 
-// Safe JSON parsing keeps corrupted localStorage from breaking the admin and auth screens.
-export const safeJsonParse = (value, fallback) => {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-};
-
-// Reads persisted settings and overlays them on the production defaults above.
+// Returns static UI defaults. No backend or local persistence is connected in this frontend-only build.
 export const readSystemSettings = () => {
-  const saved = safeJsonParse(localStorage.getItem(STORAGE_SYSTEM_SETTINGS), null);
-  const modules = saved?.modules || {};
   return {
-    ...saved,
     modules: {
-      ...modules,
       configuration: {
         ...systemConfigurationDefaults,
-        ...(modules.configuration || {}),
       },
       notifications: {
         templates: notificationTemplateDefaults,
         emailEnabled: true,
         smsEnabled: true,
-        ...(modules.notifications || {}),
       },
       payment: {
         gateways: paymentGatewayDefaults,
-        ...(modules.payment || {}),
       },
       forms: {
         policyForms: policyFormDefaults,
-        ...(modules.forms || {}),
       },
       features: {
         policyFeatures: policyFeatureDefaults,
-        ...(modules.features || {}),
       },
     },
   };
 };
 
-// Persists settings in the same localStorage key used by AdminPage.
-export const saveSystemSettings = (settings) => {
-  localStorage.setItem(STORAGE_SYSTEM_SETTINGS, JSON.stringify(settings));
-};
+// No-op placeholder so admin UI controls remain interactive without persistence.
+export const saveSystemSettings = () => {};
 
 // Lightweight getter for customer pages that only need one switch or structured config.
 export const getModuleSetting = (moduleId, settingKey, fallback) => {

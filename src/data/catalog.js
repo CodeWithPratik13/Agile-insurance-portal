@@ -1,5 +1,4 @@
 const inr = (value) => `₹${Number(value).toLocaleString("en-IN")}`;
-const ADMIN_POLICIES_KEY = "agile_insurance_admin_policies_v1";
 
 // Change category slugs, titles, subtitles, gradients, and company lists here to update homepage cards and listing pages.
 export const categories = [
@@ -223,26 +222,10 @@ export const policies = categories.flatMap((c) =>
   c.companies.flatMap((company, idx) => [1, 2, 3].map((n) => makePolicy(c.slug, company, idx + n))),
 );
 
-// Backend handoff: replace localStorage reads/writes below with GET/POST/PUT /api/policies in Express.
-const safeJsonParse = (value, fallback) => {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-};
+// UI-only admin policy helpers. Data is not persisted or synced to any database.
+export const readAdminPolicies = () => [];
 
-// Admin-created policies are normalized to the same shape as built-in cards so public pages can render them immediately.
-export const readAdminPolicies = () => {
-  if (typeof localStorage === "undefined") return [];
-  const saved = safeJsonParse(localStorage.getItem(ADMIN_POLICIES_KEY), []);
-  return Array.isArray(saved) ? saved : [];
-};
-
-export const saveAdminPolicies = (nextPolicies) => {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(ADMIN_POLICIES_KEY, JSON.stringify(nextPolicies));
-};
+export const saveAdminPolicies = () => {};
 
 export const normalizeAdminPolicy = (plan) => {
   const categorySlug = plan.categorySlug || `${String(plan.type || "health").toLowerCase().replace("motor", "car")}-insurance`;
