@@ -1,745 +1,34 @@
 import { useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  BadgeCheck,
-  BarChart3,
-  Bell,
-  CheckCircle2,
-  Circle,
-  ClipboardCheck,
-  CreditCard,
-  Download,
-  Edit3,
-  Eraser,
-  Eye,
-  FileText,
-  Headphones,
-  KeyRound,
-  LayoutDashboard,
-  LineChart,
-  Lock,
-  LogOut,
-  Mail,
-  Menu,
-  MessageSquare,
-  PenLine,
-  PieChart,
-  Plus,
-  Search,
-  Send,
-  ScrollText,
-  Settings,
-  ShieldCheck,
-  Smartphone,
-  Trash2,
-  Undo2,
-  UserCog,
-  Users,
-  X,
-  XCircle,
-} from "lucide-react";
-import {
-  notificationTemplateDefaults,
-  paymentGatewayDefaults,
-  policyFeatureDefaults,
-  policyFormDefaults,
-  readSystemSettings as readConfiguredSystemSettings,
-  saveSystemSettings as saveConfiguredSystemSettings,
-  systemConfigurationDefaults,
-} from "../utils/systemSettings";
+import { Bell, CheckCircle2, Edit3, Eye, Menu, Search, Trash2, X } from "lucide-react";
 import { notifyClaimDecision } from "../utils/notifications";
-import { normalizeAdminPolicy, readAdminPolicies, saveAdminPolicies } from "../data/catalog";
 import { randomDigits } from "../utils/ids";
-
-const makeUiId = (prefix, length = 6) => `${prefix}${randomDigits(length)}`;
-
-const defaultAdminProfiles = [
-  {
-    adminId: "ADM-SUPER-001",
-    password: "Super@123",
-    profilePhoto: "",
-    name: "Asha Menon",
-    email: "asha.admin@agileinsure.in",
-    role: "Super Admin",
-    initials: "AM",
-    access: "Full platform access",
-  },
-  {
-    adminId: "ADM-MGR-002",
-    password: "Manager@123",
-    profilePhoto: "",
-    name: "Rohit Kapoor",
-    email: "rohit.manager@agileinsure.in",
-    role: "Insurance Manager",
-    initials: "RK",
-    access: "Policies, users, requirements",
-  },
-  {
-    adminId: "ADM-CLM-003",
-    password: "Claims@123",
-    profilePhoto: "",
-    name: "Naina Shah",
-    email: "naina.claims@agileinsure.in",
-    role: "Claims Officer",
-    initials: "NS",
-    access: "Claims and document review",
-  },
-  {
-    adminId: "ADM-SUP-004",
-    password: "Support@123",
-    profilePhoto: "",
-    name: "Imran Ali",
-    email: "imran.support@agileinsure.in",
-    role: "Support Executive",
-    initials: "IA",
-    access: "Tickets and user replies",
-  },
-];
-
-const defaultAuditLogs = [
-  { id: "LOG-001", action: "/api/v4/bridges/deploy", username: "asha.admin@agileinsure.in", initials: "AM", createdAt: new Date(Date.now() - 3600000).toISOString() },
-  { id: "LOG-002", action: "/api/v4/assets/create", username: "rohit.manager@agileinsure.in", initials: "RK", createdAt: new Date(Date.now() - 14400000).toISOString() },
-  { id: "LOG-003", action: "/api/v4/documents/verify", username: "naina.claims@agileinsure.in", initials: "NS", createdAt: new Date(Date.now() - 72000000).toISOString() },
-];
-
-const navItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["Super Admin", "Insurance Manager", "Claims Officer", "Support Executive"] },
-  { id: "users", label: "User Management", icon: Users, roles: ["Super Admin", "Insurance Manager"] },
-  { id: "claims", label: "Claims Management", icon: ClipboardCheck, roles: ["Super Admin", "Claims Officer"] },
-  { id: "requirements", label: "Requirements", icon: BadgeCheck, roles: ["Super Admin", "Insurance Manager"] },
-  { id: "support", label: "Support Center", icon: Headphones, roles: ["Super Admin", "Support Executive"] },
-  { id: "policies", label: "Policy Management", icon: FileText, roles: ["Super Admin", "Insurance Manager"] },
-  { id: "documents", label: "Document Verification", icon: ShieldCheck, roles: ["Super Admin", "Claims Officer"] },
-  { id: "reports", label: "Reports & Analytics", icon: BarChart3, roles: ["Super Admin", "Insurance Manager"] },
-  { id: "profile", label: "Admin Profile", icon: UserCog, roles: ["Super Admin", "Insurance Manager", "Claims Officer", "Support Executive"] },
-  { id: "auditlog", label: "Audit Log", icon: ScrollText, roles: ["Super Admin", "Insurance Manager", "Claims Officer", "Support Executive"] },
-  { id: "settings", label: "System Settings", icon: Settings, roles: ["Super Admin"] },
-];
-
-const metrics = [
-  { label: "Total Users", value: "24,860", change: "+12.4%", icon: Users, tone: "bg-blue-600", page: "users" },
-  { label: "Active Policies", value: "18,204", change: "+8.1%", icon: FileText, tone: "bg-emerald-600", page: "policies" },
-  { label: "Pending Claims", value: "326", change: "42 urgent", icon: AlertTriangle, tone: "bg-amber-500", page: "claims" },
-  { label: "Approved Claims", value: "4,812", change: "+15.7%", icon: CheckCircle2, tone: "bg-teal-600", page: "claims" },
-  { label: "Rejected Claims", value: "284", change: "-2.3%", icon: XCircle, tone: "bg-rose-600", page: "claims" },
-  { label: "Open Support Tickets", value: "149", change: "31 high", icon: MessageSquare, tone: "bg-violet-600", page: "support" },
-  { label: "Revenue Generated", value: "INR 8.42 Cr", change: "+18.2%", icon: CreditCard, tone: "bg-indigo-600", page: "reports" },
-];
-
-const users = [
-  { id: "USR1001", name: "Priya Sharma", email: "priya@example.com", phone: "+91 98765 43210", policies: 3, status: "Active", city: "Pune" },
-  { id: "USR1002", name: "Rahul Verma", email: "rahul@example.com", phone: "+91 99887 77665", policies: 1, status: "Active", city: "Delhi" },
-  { id: "USR1003", name: "Ananya Iyer", email: "ananya@example.com", phone: "+91 91234 56780", policies: 4, status: "Inactive", city: "Bengaluru" },
-  { id: "USR1004", name: "Kabir Singh", email: "kabir@example.com", phone: "+91 95555 44112", policies: 2, status: "Active", city: "Mumbai" },
-];
-
-const claims = [
-  { id: "CLM001", user: "John Mathew", policy: "Health", amount: "INR 50,000", status: "Pending", officer: "Riya S." },
-  { id: "CLM002", user: "Aarav Mehta", policy: "Car", amount: "INR 1,24,500", status: "Under Review", officer: "Nikhil P." },
-  { id: "CLM003", user: "Meera Rao", policy: "Life", amount: "INR 7,50,000", status: "Approved", officer: "Fatima K." },
-  { id: "CLM004", user: "Sana Khan", policy: "Travel", amount: "INR 82,000", status: "Documents", officer: "Dev A." },
-];
-
-const tickets = [
-  { id: "TKT001", user: "User A", subject: "Claim Issue", priority: "High", status: "Open" },
-  { id: "TKT002", user: "User B", subject: "Premium payment failed", priority: "Medium", status: "In Progress" },
-  { id: "TKT003", user: "User C", subject: "Policy document missing", priority: "Low", status: "Waiting for User" },
-  { id: "TKT004", user: "User D", subject: "Advisor callback request", priority: "High", status: "Open" },
-];
-
-const requirements = [
-  { user: "Kabir S.", age: 34, budget: "INR 18,000", coverage: "INR 15L", status: "Quote Ready" },
-  { user: "Nisha P.", age: 42, budget: "INR 30,000", coverage: "INR 25L", status: "Review" },
-  { user: "Aditya R.", age: 29, budget: "INR 12,000", coverage: "INR 10L", status: "Consultation" },
-];
-
-const documents = [
-  { type: "Aadhaar", owner: "Priya Sharma", status: "Approved" },
-  { type: "PAN", owner: "Rahul Verma", status: "Pending" },
-  { type: "Driving License", owner: "Aarav Mehta", status: "Pending" },
-  { type: "Medical Reports", owner: "Meera Rao", status: "Re-upload" },
-  { type: "Claim Documents", owner: "Sana Khan", status: "Verification" },
-];
-
-// Developer note: user uploads from DashboardDocuments are normalized here for admin review/markup.
-// Add new document metadata here if the user-side vault stores more fields later.
-const readUploadedDocuments = () => [];
-
-// Developer note: customer-submitted claims are stored by DashboardClaims and merged into admin review rows here.
-const readSubmittedClaims = () => [];
-
-// Developer note: default demo claims are kept only when there are no real submitted claims.
-const readAdminClaims = () => {
-  const submitted = readSubmittedClaims();
-  return submitted.length ? [...submitted, ...claims.filter((claim) => !submitted.some((item) => item.id === claim.id))] : claims;
-};
-
-// Developer note: add/remove System Settings tiles here; each id should match a key in settingFieldGroups.
-const adminSettingCards = [
-  { id: "general", title: "General Setting", description: "Configure the fundamental information of the site.", icon: Settings },
-  { id: "branding", title: "Logo and Favicon", description: "Upload your logo and favicon here.", icon: LayoutDashboard },
-  { id: "configuration", title: "System Configuration", description: "Enable or disable core modules, portals, audit logging, and multi-hospital operations.", icon: UserCog },
-  { id: "notifications", title: "Notification Setting", description: "Manage email/SMS switches and production notification templates.", icon: Bell },
-  { id: "payment", title: "Payment Gateways", description: "Configure Razorpay, Stripe, PayPal, and Bank Transfer for checkout.", icon: CreditCard },
-  { id: "withdrawals", title: "Withdrawals Methods", description: "Set up manual withdrawal methods for payout requests.", icon: KeyRound },
-  { id: "forms", title: "Policy Forms", description: "Build dynamic Health and Vehicle policy creation forms.", icon: ClipboardCheck },
-  { id: "features", title: "Manage Features", description: "Manage Health and Vehicle insurance add-ons.", icon: Edit3 },
-  { id: "regulations", title: "Policy Regulations", description: "Define what will and will not be covered in plans.", icon: AlertTriangle },
-  { id: "seo", title: "SEO Configuration", description: "Configure meta title, description, and keywords.", icon: LineChart },
-  { id: "frontend", title: "Manage Frontend", description: "Control all frontend contents of the system.", icon: Smartphone },
-  { id: "pages", title: "Manage Pages", description: "Control dynamic and static pages of the system.", icon: FileText },
-  { id: "kyc", title: "KYC Setting", description: "Configure client information fields.", icon: ShieldCheck },
-  { id: "social", title: "Social Login Setting", description: "Provide required social login information.", icon: Users },
-  { id: "language", title: "Language", description: "Configure languages and keywords to localize the system.", icon: MessageSquare },
-  { id: "extensions", title: "Extensions", description: "Manage extensions of the system.", icon: Plus },
-  { id: "policyPages", title: "Policy Pages", description: "Configure policy and terms of the system.", icon: Lock },
-  { id: "maintenance", title: "Maintenance Mode", description: "Enable or disable maintenance mode when required.", icon: Settings },
-  { id: "cookie", title: "GDPR Cookie", description: "Set GDPR cookie policy for visitors.", icon: CheckCircle2 },
-  { id: "css", title: "Custom CSS", description: "Write custom CSS for frontend styles.", icon: FileText },
-  { id: "sitemap", title: "Sitemap XML", description: "Insert sitemap XML to enhance SEO performance.", icon: LayoutDashboard },
-  { id: "robots", title: "Robots txt", description: "Insert robots.txt content for web crawlers.", icon: FileText },
-];
-
-// Developer note: edit field definitions here to change which controls appear inside each settings tile.
-const settingFieldGroups = {
-  general: [
-    { name: "companyName", label: "Company Name", type: "text", defaultValue: "Agile Insurance" },
-    { name: "supportEmail", label: "Support Email", type: "text", defaultValue: "support@agileinsure.in" },
-    { name: "supportPhone", label: "Support Phone", type: "text", defaultValue: "+91 98765 43210" },
-    { name: "serviceTaxRate", label: "Service Tax Rate (%)", type: "number", defaultValue: 18 },
-  ],
-  branding: [
-    { name: "logo", label: "Logo", type: "file", accept: "image/*", defaultValue: "" },
-    { name: "favicon", label: "Favicon", type: "file", accept: "image/*", defaultValue: "" },
-    { name: "brandColor", label: "Brand Color", type: "color", defaultValue: "#2563eb" },
-  ],
-  configuration: [
-    { name: "claimsModule", label: "Enable Claims Module", type: "boolean", defaultValue: systemConfigurationDefaults.claimsModule },
-    { name: "quotesModule", label: "Enable Quotes Module", type: "boolean", defaultValue: systemConfigurationDefaults.quotesModule },
-    { name: "policyRenewal", label: "Enable Policy Renewal", type: "boolean", defaultValue: systemConfigurationDefaults.policyRenewal },
-    { name: "agentPortal", label: "Enable Agent Portal", type: "boolean", defaultValue: systemConfigurationDefaults.agentPortal },
-    { name: "customerPortal", label: "Enable Customer Portal", type: "boolean", defaultValue: systemConfigurationDefaults.customerPortal },
-    { name: "emailNotifications", label: "Enable Email Notifications", type: "boolean", defaultValue: systemConfigurationDefaults.emailNotifications },
-    { name: "smsNotifications", label: "Enable SMS Notifications", type: "boolean", defaultValue: systemConfigurationDefaults.smsNotifications },
-    { name: "auditLogging", label: "Enable Audit Logging", type: "boolean", defaultValue: systemConfigurationDefaults.auditLogging },
-    { name: "multiHospitalSupport", label: "Enable Multi-Hospital Support", type: "boolean", defaultValue: systemConfigurationDefaults.multiHospitalSupport },
-  ],
-  notifications: [
-    { name: "emailEnabled", label: "Email Notifications", type: "boolean", defaultValue: true },
-    { name: "smsEnabled", label: "SMS Notifications", type: "boolean", defaultValue: true },
-    { name: "renewalReminderDays", label: "Renewal Reminder Days", type: "number", defaultValue: 15 },
-    { name: "templates", label: "Notification Templates", type: "templateList", defaultValue: notificationTemplateDefaults },
-  ],
-  payment: [
-    { name: "gateways", label: "Gateway Configurations", type: "gatewayList", defaultValue: paymentGatewayDefaults },
-    { name: "minimumPayment", label: "Minimum Payment", type: "number", defaultValue: 500 },
-  ],
-  withdrawals: [
-    { name: "bankTransfer", label: "Bank Transfer", type: "boolean", defaultValue: true },
-    { name: "upiPayout", label: "UPI Payout", type: "boolean", defaultValue: true },
-    { name: "minimumWithdrawal", label: "Minimum Withdrawal", type: "number", defaultValue: 1000 },
-    { name: "payoutNote", label: "Payout Instructions", type: "textarea", defaultValue: "Verify bank details before approving payouts." },
-  ],
-  forms: [
-    { name: "policyForms", label: "Dynamic Policy Creation Forms", type: "policyFormBuilder", defaultValue: policyFormDefaults },
-  ],
-  features: [
-    { name: "aiAssistant", label: "AI Assistant", type: "boolean", defaultValue: true },
-    { name: "policyCompare", label: "Policy Compare", type: "boolean", defaultValue: true },
-    { name: "claimTracking", label: "Claim Tracking", type: "boolean", defaultValue: true },
-    { name: "policyFeatures", label: "Insurance Feature Add-ons", type: "featureMatrix", defaultValue: policyFeatureDefaults },
-  ],
-  regulations: [
-    { name: "coveredItems", label: "Covered Items", type: "textarea", defaultValue: "Hospitalization, accident damage, policy benefits, verified expenses" },
-    { name: "excludedItems", label: "Excluded Items", type: "textarea", defaultValue: "Fraudulent claims, expired policies, missing documents" },
-    { name: "highValueReviewAmount", label: "High Value Review Amount", type: "number", defaultValue: 100000 },
-  ],
-  seo: [
-    { name: "metaTitle", label: "Meta Title", type: "text", defaultValue: "Agile Insurance Portal" },
-    { name: "metaDescription", label: "Meta Description", type: "textarea", defaultValue: "Compare, buy, and manage insurance policies online." },
-    { name: "keywords", label: "Meta Keywords", type: "textarea", defaultValue: "insurance, claims, policy, health insurance, car insurance" },
-  ],
-  frontend: [
-    { name: "heroTitle", label: "Home Hero Title", type: "text", defaultValue: "Smart Insurance for Every Need" },
-    { name: "primaryCta", label: "Primary CTA", type: "text", defaultValue: "Explore Policies" },
-    { name: "showTestimonials", label: "Show Testimonials", type: "boolean", defaultValue: true },
-  ],
-  pages: [
-    { name: "aboutPage", label: "About Page", type: "boolean", defaultValue: true },
-    { name: "contactPage", label: "Contact Page", type: "boolean", defaultValue: true },
-    { name: "articlesPage", label: "Articles Page", type: "boolean", defaultValue: true },
-    { name: "pageNotice", label: "Page Notice", type: "textarea", defaultValue: "Static pages are managed by the admin team." },
-  ],
-  kyc: [
-    { name: "aadhaarRequired", label: "Aadhaar Required", type: "boolean", defaultValue: true },
-    { name: "panRequired", label: "PAN Required", type: "boolean", defaultValue: true },
-    { name: "selfieRequired", label: "Selfie Required", type: "boolean", defaultValue: false },
-    { name: "autoRejectIncomplete", label: "Auto Reject Incomplete KYC", type: "boolean", defaultValue: false },
-  ],
-  social: [
-    { name: "googleLogin", label: "Google Login", type: "boolean", defaultValue: true },
-    { name: "facebookLogin", label: "Facebook Login", type: "boolean", defaultValue: false },
-    { name: "clientId", label: "OAuth Client ID", type: "text", defaultValue: "" },
-  ],
-  language: [
-    { name: "defaultLanguage", label: "Default Language", type: "select", defaultValue: "English", options: ["English", "Hindi", "Tamil", "Bengali"] },
-    { name: "multiLanguage", label: "Enable Multi Language", type: "boolean", defaultValue: false },
-    { name: "customLabels", label: "Custom Labels", type: "textarea", defaultValue: "claim=Claim\npolicy=Policy\nsupport=Support" },
-  ],
-  extensions: [
-    { name: "analytics", label: "Analytics Extension", type: "boolean", defaultValue: true },
-    { name: "chatbot", label: "Chatbot Extension", type: "boolean", defaultValue: true },
-    { name: "documentScanner", label: "Document Scanner", type: "boolean", defaultValue: false },
-  ],
-  policyPages: [
-    { name: "terms", label: "Terms and Conditions", type: "textarea", defaultValue: "Policy terms are subject to verification and approval." },
-    { name: "privacy", label: "Privacy Policy", type: "textarea", defaultValue: "Customer data is stored securely for insurance operations." },
-  ],
-  maintenance: [
-    { name: "enabled", label: "Maintenance Mode", type: "boolean", defaultValue: false },
-    { name: "message", label: "Maintenance Message", type: "textarea", defaultValue: "The portal is temporarily under maintenance. Please check back soon." },
-  ],
-  cookie: [
-    { name: "enabled", label: "GDPR Cookie Banner", type: "boolean", defaultValue: true },
-    { name: "message", label: "Cookie Message", type: "textarea", defaultValue: "We use cookies to improve your insurance portal experience." },
-  ],
-  css: [
-    { name: "customCss", label: "Custom CSS", type: "textarea", defaultValue: "body { scroll-behavior: smooth; }" },
-  ],
-  sitemap: [
-    { name: "xml", label: "Sitemap XML", type: "textarea", defaultValue: "<urlset><url><loc>https://agileinsure.in/</loc></url></urlset>" },
-  ],
-  robots: [
-    { name: "content", label: "Robots.txt Content", type: "textarea", defaultValue: "User-agent: *\nAllow: /\nSitemap: https://agileinsure.in/sitemap.xml" },
-  ],
-};
-
-const defaultPolicyPlans = [
-  { name: "Health Secure Plus", type: "Health", coverage: "INR 25L", premium: "INR 1,850/mo", duration: "1 year", state: "Active" },
-  { name: "Drive Shield Elite", type: "Motor", coverage: "IDV based", premium: "INR 9,600/yr", duration: "1 year", state: "Active" },
-  { name: "Term Life Max", type: "Life", coverage: "INR 1 Cr", premium: "INR 1,120/mo", duration: "30 years", state: "Draft" },
-  { name: "Travel Global Care", type: "Travel", coverage: "USD 100K", premium: "INR 2,400/trip", duration: "Trip", state: "Inactive" },
-];
-
-// Backend handoff: this adapter currently mirrors admin policy rows to localStorage; replace with Express policy APIs later.
-const readAdminPolicyRows = () => {
-  const saved = readAdminPolicies();
-  if (!saved.length) return defaultPolicyPlans;
-  return saved.map((policy) => ({
-    id: policy.id,
-    name: policy.policyName,
-    company: policy.company,
-    categorySlug: policy.categorySlug,
-    type: policy.categorySlug?.replace("-insurance", "").replace("car", "Vehicle") || "Health",
-    coverage: policy.coverageLabel,
-    premium: `INR ${policy.premiumYearly}/yr`,
-    premiumYearly: policy.premiumYearly,
-    offer: policy.aiBadge || "",
-    duration: `${policy.validityYears || 1} year`,
-    renewalDate: policy.renewalDate || "",
-    themeColor: policy.themeColor || "#2563eb",
-    state: policy.state || "Active",
-  }));
-};
-
-const claimSteps = ["Submitted", "Under Review", "Document Verification", "Approved / Rejected", "Payment Processing", "Completed"];
-
-const pageTitles = {
-  dashboard: "Admin Dashboard",
-  users: "User Management",
-  claims: "Claims Management",
-  requirements: "Requirement Management",
-  support: "Support Center",
-  policies: "Policy Management",
-  documents: "Document Verification",
-  notifications: "Notification Center",
-  reports: "Reports & Analytics",
-  "report-detail": "Report Detail",
-  profile: "Admin Profile",
-  auditlog: "Audit Log",
-  settings: "System Settings",
-  "setting-detail": "System Setting",
-};
-
-const loadAdmins = () => defaultAdminProfiles;
-
-const saveAdmins = () => {};
-
-const readSupportChats = () => [];
-
-const saveSupportChats = () => {};
-
-const loadAuditLogs = () => defaultAuditLogs;
-
-const saveAuditLogs = () => {};
-
-// Developer note: AdminPage uses the shared settings utility so auth and checkout read the same switches.
-const readSystemSettings = readConfiguredSystemSettings;
-const saveSystemSettings = saveConfiguredSystemSettings;
-
-const readRealUsers = () => [];
-
-const readUserActivity = (user, adminClaims = []) => {
-  const purchases = [];
-  const payments = [];
-  const documentsData = [];
-  const allClaims = adminClaims.filter((claim) => {
-    const claimUser = claim.user || claim.fullName || claim.name || "";
-    const claimEmail = claim.email || "";
-    return claimUser === user.name || claimEmail === user.email;
-  });
-  const allDocuments = documentsData;
-
-  return {
-    profile: user.name,
-    email: user.email,
-    phone: user.phone,
-    city: user.city,
-    address: user.address || "Not added",
-    loginStatus: user.status,
-    policiesPurchased: Array.isArray(purchases) ? purchases.length : 0,
-    claimsSubmitted: allClaims.length,
-    claimSummary: allClaims.length ? allClaims.map((claim) => `${claim.id || claim.claimId || "Claim"} - ${claim.policy || claim.policyName || "Policy"} - ${claim.status || "Submitted"}`).join("; ") : "No claims found for this user",
-    paymentsMade: Array.isArray(payments) ? payments.filter((payment) => payment.status === "Success").length : 0,
-    documentsUploaded: allDocuments.length,
-    documents: allDocuments.length ? allDocuments.map((doc) => doc.name || doc.type || doc.fileName || "Document").join(", ") : "No uploaded documents found",
-    recentActivity: user.status === "Logged In" ? "Currently logged in to the user portal" : "Registered user profile available",
-  };
-};
-
-const formatStructuredDetail = (value) => {
-  if (typeof value === "string") return value;
-  return Object.entries(value)
-    .map(([key, item]) => {
-      const label = key.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
-      return `${label}: ${item}`;
-    })
-    .join("\n");
-};
-
-const fileToDataUrl = (file, callback) => {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => callback(String(reader.result || ""));
-  reader.readAsDataURL(file);
-};
-
-const statusClass = (status) => {
-  const value = String(status).toLowerCase();
-  if (value.includes("approved") || value.includes("active") || value.includes("ready") || value.includes("logged in")) {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
-  }
-  if (value.includes("reject") || value.includes("inactive") || value.includes("re-upload")) {
-    return "bg-rose-50 text-rose-700 ring-rose-200";
-  }
-  if (value.includes("open") || value.includes("high") || value.includes("pending") || value.includes("review")) {
-    return "bg-amber-50 text-amber-700 ring-amber-200";
-  }
-  return "bg-blue-50 text-blue-700 ring-blue-200";
-};
-
-// FIX 1: Added default values for MiniBars values prop
-const MiniBars = ({ values = [60, 75, 45, 90, 65, 80, 55, 70, 85, 50, 95, 78], color = "#2563eb" }) => (
-  <div className="flex h-28 items-end gap-2">
-    {values.map((value, index) => (
-      <div key={`${value}-${index}`} className="flex flex-1 items-end">
-        <div className="w-full rounded-t" style={{ height: `${value}%`, backgroundColor: color }} title={`${value}%`} />
-      </div>
-    ))}
-  </div>
-);
-
-// FIX 2: Added default values for LineSpark values prop
-const LineSpark = ({ values = [30, 55, 40, 70, 50, 85, 60, 75, 45, 90, 65, 80], color = "#2563eb" }) => {
-  const points = useMemo(() => {
-    const max = Math.max(...values);
-    const min = Math.min(...values);
-    const range = Math.max(max - min, 1);
-    return values
-      .map((value, index) => {
-        const x = (index / Math.max(values.length - 1, 1)) * 260;
-        const y = 96 - ((value - min) / range) * 82;
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }, [values]);
-
-  return (
-    <svg viewBox="0 0 260 110" className="h-28 w-full" role="img" aria-label="Trend line chart">
-      <polyline points={points} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-      {points.split(" ").map((point) => {
-        const [x, y] = point.split(",");
-        return <circle key={point} cx={x} cy={y} r="4" fill="white" stroke={color} strokeWidth="3" />;
-      })}
-    </svg>
-  );
-};
-
-const SectionTitle = ({ icon: Icon, title, action }) => (
-  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-    <div className="flex min-w-0 items-center gap-3">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700">
-        <Icon size={18} />
-      </span>
-      <h2 className="truncate text-base font-black text-slate-950">{title}</h2>
-    </div>
-    {action}
-  </div>
-);
-
-const ActionButton = ({ icon: Icon, label, onClick }) => (
-  <button
-    onClick={onClick}
-    className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
-    title={label}
-    aria-label={label}
-  >
-    <Icon size={16} />
-  </button>
-);
-
-const AdminLogin = ({ adminProfiles, selectedProfile, setSelectedProfile, onLogin }) => {
-  const [otpOpen, setOtpOpen] = useState(false);
-  const [adminId, setAdminId] = useState(selectedProfile.adminId);
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-
-  const chooseProfile = (profile) => {
-    setSelectedProfile(profile);
-    setAdminId(profile.adminId);
-    setPassword("");
-    setError("");
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900 sm:py-10">
-      <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-6xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm lg:grid-cols-[1fr_440px]">
-        <section className="flex flex-col justify-between bg-slate-950 p-6 text-white sm:p-8">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-black text-white">
-              <ShieldCheck size={16} />
-              Agile Insurance Admin
-            </span>
-            <h1 className="mt-8 max-w-xl text-3xl font-black tracking-tight sm:text-4xl">Secure admin login for role-based operations</h1>
-            <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
-              Choose an admin profile, verify credentials, and open the workspace with role-matched pages and actions.
-            </p>
-          </div>
-
-          <div className="mt-8 grid gap-3 sm:grid-cols-2">
-            {adminProfiles.map((profile) => (
-              <button
-                key={profile.email}
-                onClick={() => chooseProfile(profile)}
-                className={`cursor-pointer rounded-lg border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg ${selectedProfile.email === profile.email ? "border-blue-400 bg-blue-500/15" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-lg bg-white text-sm font-black text-slate-950">{profile.initials}</span>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-black">{profile.name}</div>
-                    <div className="truncate text-xs font-semibold text-slate-300">{profile.role}</div>
-                  </div>
-                </div>
-                <div className="mt-3 text-xs font-semibold text-slate-300">{profile.access}</div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="p-6 sm:p-8">
-          <div className="flex items-center gap-3">
-            <span className="grid h-12 w-12 place-items-center rounded-lg bg-blue-600 font-black text-white">{selectedProfile.initials}</span>
-            <div>
-              <div className="text-lg font-black text-slate-950">Admin Login</div>
-              <div className="text-sm font-semibold text-slate-500">{selectedProfile.role}</div>
-            </div>
-          </div>
-
-          <form
-            className="mt-8 space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!adminId.trim() || !password.trim()) {
-                setError("Enter any admin ID/email and password to preview the admin UI.");
-                return;
-              }
-              // Frontend-only preview: backend team should replace this with admin auth API validation.
-              onLogin();
-            }}
-          >
-            <label className="block">
-              <span className="text-xs font-black uppercase tracking-wide text-slate-500">Admin ID</span>
-              <div className="relative mt-2">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input className="h-12 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm font-bold outline-none focus:border-blue-500" value={adminId} onChange={(event) => setAdminId(event.target.value)} />
-              </div>
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-black uppercase tracking-wide text-slate-500">Password</span>
-              <div className="relative mt-2">
-                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input className="h-12 w-full rounded-lg border border-slate-200 bg-slate-50 pl-10 pr-16 text-sm font-bold outline-none focus:border-blue-500" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter admin password" />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((value) => !value)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-black text-blue-700 hover:bg-blue-50"
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-            </label>
-
-            <div className="flex items-center justify-between gap-3 text-sm font-bold">
-              <label className="inline-flex items-center gap-2 text-slate-600">
-                <input type="checkbox" className="h-4 w-4 rounded border-slate-300" defaultChecked />
-                Remember me
-              </label>
-              <button type="button" className="text-blue-700 hover:text-blue-900">Forgot Password</button>
-            </div>
-
-            <button type="button" onClick={() => setOtpOpen((value) => !value)} className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm font-black text-slate-700">
-              <span className="inline-flex items-center gap-2"><Smartphone size={18} />Two-Factor Authentication</span>
-              <span className="text-blue-700">{otpOpen ? "Enabled" : "OTP"}</span>
-            </button>
-
-            {otpOpen && (
-              <label className="block">
-                <span className="text-xs font-black uppercase tracking-wide text-slate-500">OTP Code</span>
-                <input className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-black tracking-[0.4em] outline-none focus:border-blue-500" defaultValue="482910" maxLength={6} />
-              </label>
-            )}
-
-            {error && <div className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700">{error}</div>}
-
-            <button className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-700">
-              <Lock size={18} />
-              Login as {selectedProfile.role}
-            </button>
-          </form>
-        </section>
-      </div>
-    </div>
-  );
-};
-
-const DataTable = ({ columns, rows, renderActions }) => (
-  <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
-    <table className="w-full min-w-[760px] text-left text-sm">
-      <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-        <tr>
-          {columns.map((head) => (
-            <th key={head} className="px-3 py-3 font-black">{head}</th>
-          ))}
-          {renderActions && <th className="px-3 py-3 font-black">Actions</th>}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100 bg-white">
-        {rows.map((row) => (
-          <tr key={row.id || row.name || row.user || row.type}>
-            {columns.map((column) => {
-              const key = column.toLowerCase().replaceAll(" ", "");
-              const value = row[key] ?? row[column.toLowerCase()] ?? row[column] ?? row.state ?? "";
-              return (
-                <td key={column} className="px-3 py-4 font-semibold text-slate-700">
-                  {String(value).match(/active|pending|approved|review|open|inactive|draft|verification|re-upload/i) ? (
-                    <span className={`rounded-lg px-2 py-1 text-xs font-black ring-1 ${statusClass(value)}`}>{value}</span>
-                  ) : (
-                    value
-                  )}
-                </td>
-              );
-            })}
-            {renderActions && <td className="px-3 py-4">{renderActions(row)}</td>}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
-
-const AdminSidebar = ({
-  mobile = false,
-  collapsed = false,
-  allowedNav,
-  activePage,
-  selectedProfile,
-  openPage,
-  onLogout,
-  onToggleCollapsed,
-}) => (
-  <aside className={`${mobile ? "flex" : "hidden lg:flex"} h-full ${collapsed && !mobile ? "w-[92px]" : "w-[292px]"} shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-300`}>
-    <div className={`flex items-center gap-3 border-b border-slate-200 px-4 py-5 ${collapsed && !mobile ? "justify-center" : ""}`}>
-      {(!collapsed || mobile) && (
-        <>
-          <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-600 text-white">
-            <ShieldCheck size={22} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-base font-black text-slate-950">Agile Admin</div>
-            <div className="truncate text-xs font-semibold text-slate-500">{selectedProfile.role}</div>
-          </div>
-        </>
-      )}
-      <button
-        onClick={onToggleCollapsed}
-        className="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm"
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        <Menu size={20} />
-      </button>
-    </div>
-
-    <nav className="scrollbar-none min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
-      {allowedNav.map((item) => {
-        const Icon = item.icon;
-        const active = activePage === item.id;
-        return (
-          <div key={item.id}>
-            <button
-              onClick={() => openPage(item.id)}
-              className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-bold transition hover:-translate-y-0.5 hover:shadow-sm ${collapsed && !mobile ? "justify-center" : ""} ${active ? "bg-blue-600 text-white" : "text-slate-700 hover:bg-blue-50 hover:text-blue-700"}`}
-              title={item.label}
-              aria-label={item.label}
-            >
-              <Icon size={18} className={active ? "text-white" : "text-blue-700"} />
-              {(!collapsed || mobile) && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
-            </button>
-          </div>
-        );
-      })}
-    </nav>
-
-    <div className="border-t border-slate-200 p-4">
-      {(!collapsed || mobile) && <div className="mb-3 flex items-center gap-3 rounded-lg bg-slate-50 p-3">
-        {selectedProfile.profilePhoto ? (
-          <img src={selectedProfile.profilePhoto} alt={selectedProfile.name} className="h-10 w-10 rounded-lg object-cover" />
-        ) : (
-          <span className="grid h-10 w-10 place-items-center rounded-lg bg-blue-600 text-xs font-black text-white">{selectedProfile.initials}</span>
-        )}
-        <div className="min-w-0">
-          <div className="truncate text-sm font-black text-slate-950">{selectedProfile.name}</div>
-          <div className="truncate text-xs font-semibold text-slate-500">{selectedProfile.email}</div>
-        </div>
-      </div>}
-      <button
-        onClick={onLogout}
-        className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-3 text-sm font-bold text-slate-700 transition hover:bg-blue-50 hover:text-blue-700 ${collapsed && !mobile ? "justify-center" : ""}`}
-        title="Logout"
-      >
-        <LogOut size={18} />
-        {(!collapsed || mobile) && "Logout"}
-      </button>
-    </div>
-  </aside>
-);
+import { readSystemSettings, saveSystemSettings } from "../utils/systemSettings";
+import { adminSettingCards, navItems, pageTitles, requirements, tickets, users, documents } from "./admin/constants";
+import {
+  fileToDataUrl,
+  formatStructuredDetail,
+  loadAdmins,
+  loadAuditLogs,
+  makeUiId,
+  persistPolicyRows,
+  readAdminClaims,
+  readAdminPolicyRows,
+  readRealUsers,
+  readSupportChats,
+  readUploadedDocuments,
+  rowKeyFor,
+  saveAdmins,
+  saveAuditLogs,
+} from "./admin/helpers";
+import AdminLogin from "./admin/AdminLogin";
+import AdminPageContent from "./admin/AdminPageContent";
+import AdminSidebar from "./admin/AdminSidebar";
+import ActionButton from "./admin/ActionButton";
+import EditPanel from "./admin/EditPanel";
+import RightPanel from "./admin/RightPanel";
 
 const AdminPage = () => {
   const [adminProfiles, setAdminProfiles] = useState(() => loadAdmins());
-  // FIX 3: selectedProfile should be a single profile object, not the entire array
   const [selectedProfile, setSelectedProfile] = useState(() => loadAdmins()[0]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activePage, setActivePage] = useState("dashboard");
@@ -761,7 +50,6 @@ const AdminPage = () => {
   const [systemSettings, setSystemSettings] = useState(readSystemSettings);
   const [selectedSettingId, setSelectedSettingId] = useState("general");
   const [showAdminProfilePassword, setShowAdminProfilePassword] = useState(false);
-  // FIX 4: adminNameDraft should use selectedProfile, not loadAdmins() which returns array
   const [adminNameDraft, setAdminNameDraft] = useState(() => loadAdmins()[0]?.name || "");
   const [passwordDraft, setPasswordDraft] = useState({ old: "", next: "", confirm: "" });
   const [passwordMessage, setPasswordMessage] = useState("");
@@ -774,7 +62,6 @@ const AdminPage = () => {
   const [documentMarks, setDocumentMarks] = useState({});
   const [markupTool, setMarkupTool] = useState("pen");
   const [draftMark, setDraftMark] = useState(null);
-  const [auditFilter, setAuditFilter] = useState("login");
   const [detail, setDetail] = useState({
     title: "Admin Activity",
     body: "Select a row or action to view operational context here.",
@@ -798,20 +85,6 @@ const AdminPage = () => {
     });
   };
 
-  const dashboardMetrics = useMemo(
-    () =>
-      metrics.map((metric) => {
-        if (metric.label === "Total Users") return { ...metric, value: String(customerRows.length), change: `${activeUsers} active` };
-        if (metric.label === "Pending Claims") return { ...metric, value: String(claimRows.filter((claim) => claim.status !== "Approved" && claim.status !== "Rejected").length) };
-        if (metric.label === "Approved Claims") return { ...metric, value: String(claimRows.filter((claim) => claim.status === "Approved").length) };
-        if (metric.label === "Rejected Claims") return { ...metric, value: String(claimRows.filter((claim) => claim.status === "Rejected").length) };
-        if (metric.label === "Open Support Tickets") return { ...metric, value: String(supportChats.filter((chat) => chat.status !== "Resolved").length), change: `${supportChats.length} total` };
-        if (metric.label === "Active Policies") return { ...metric, value: String(planRows.filter((plan) => plan.state === "Active").length) };
-        return metric;
-      }),
-    [activeUsers, claimRows, customerRows.length, planRows, supportChats],
-  );
-
   const allowedNav = useMemo(
     () => navItems.filter((item) => item.roles.includes(selectedProfile.role)),
     [selectedProfile.role],
@@ -827,10 +100,6 @@ const AdminPage = () => {
 
   const runAction = (title, body, photo = "") => setDetail({ title, body: formatStructuredDetail(body), photo });
 
-  const rowKeyFor = (row) => row.id || row.name || row.user || row.type;
-
-  // Developer note: this controls which columns become editable in the shared admin edit panel.
-  // Add fields here when new user, claim, policy, document, or requirement properties are introduced.
   const editFieldsByKind = {
     users: ["name", "email", "phone", "address", "policies", "status", "city"],
     claims: ["id", "user", "policy", "amount", "status", "officer", "description", "docName"],
@@ -838,12 +107,6 @@ const AdminPage = () => {
     documents: ["type", "owner", "status", "note"],
     requirements: ["user", "age", "budget", "coverage", "status"],
     support: ["id", "user", "subject", "priority", "status"],
-  };
-
-  // Developer note: route shared edit/save actions to the correct local table state here.
-  const persistPolicyRows = (rows) => {
-    const adminPolicies = rows.map((row) => normalizeAdminPolicy(row)).filter((row) => row.state !== "Draft");
-    saveAdminPolicies(adminPolicies);
   };
 
   const updateRowsForKind = (kind, updater) => {
@@ -864,7 +127,7 @@ const AdminPage = () => {
   };
 
   const startEditRecord = (kind, target) => {
-    setEditingRecord({ kind, key: rowKeyFor(target), draft: { ...target } });
+    setEditingRecord({ kind, key: rowKeyFor(target), draft: { ...target }, fields: editFieldsByKind[kind] || Object.keys(target) });
     runAction("Edit opened", `${selectedProfile.name} is editing ${rowKeyFor(target)}.`);
   };
 
@@ -873,14 +136,14 @@ const AdminPage = () => {
     updateRowsForKind(editingRecord.kind, (rows) =>
       rows.map((row) => (rowKeyFor(row) === editingRecord.key ? { ...row, ...editingRecord.draft } : row)),
     );
-    addAuditLogEntry(`/api/v4/${editingRecord.kind}/edit -> Saved changes for ${editingRecord.key}`);
+    addAuditLogEntry(`ui/${editingRecord.kind}/edit -> Saved changes for ${editingRecord.key}`);
     runAction("Changes saved", `${editingRecord.key} was updated by ${selectedProfile.name}.`);
   };
 
   const sendEditedRecordToUser = () => {
     if (!editingRecord) return;
     saveEditedRecord();
-    addAuditLogEntry(`/api/v4/${editingRecord.kind}/send -> Sent edited details back to user for ${editingRecord.key}`);
+    addAuditLogEntry(`ui/${editingRecord.kind}/send -> Sent edited details back to user for ${editingRecord.key}`);
     runAction("Sent to user", {
       record: editingRecord.key,
       type: editingRecord.kind,
@@ -888,7 +151,6 @@ const AdminPage = () => {
     });
   };
 
-  // Developer note: document markup state is keyed per document so each file keeps its own pen/circle marks.
   const currentDocumentKey = selectedDocument ? `${selectedDocument.type}-${selectedDocument.owner}` : "";
   const currentDocumentMarks = documentMarks[currentDocumentKey] || [];
 
@@ -900,7 +162,6 @@ const AdminPage = () => {
     };
   };
 
-  // Developer note: markup tools are intentionally simple SVG overlays. Add new tools beside pen/circle/eraser here.
   const startMarkup = (event) => {
     if (!selectedDocument) return;
     const point = pointFromEvent(event);
@@ -939,7 +200,6 @@ const AdminPage = () => {
     }));
   };
 
-  // Developer note: this simulates returning corrections to the user. Connect this to backend notifications later.
   const sendDocumentCorrection = () => {
     if (!selectedDocument) return;
     setDocumentRows((rows) =>
@@ -949,7 +209,7 @@ const AdminPage = () => {
           : doc,
       ),
     );
-    addAuditLogEntry(`/api/v4/documents/markup/send -> Sent correction marks for ${currentDocumentKey}`);
+    addAuditLogEntry(`ui/documents/markup/send -> Sent correction marks for ${currentDocumentKey}`);
     runAction("Document sent back", `${selectedDocument.owner} will see the marked corrections for ${selectedDocument.type}.`);
   };
 
@@ -971,8 +231,8 @@ const AdminPage = () => {
       city: "Not added",
     };
     setCustomerRows((rows) => [nextUser, ...rows]);
-    setEditingRecord({ kind: "users", key: rowKeyFor(nextUser), draft: { ...nextUser } });
-    addAuditLogEntry(`/api/v4/users/create -> Added customer profile: ${nextUser.email}`);
+    setEditingRecord({ kind: "users", key: rowKeyFor(nextUser), draft: { ...nextUser }, fields: editFieldsByKind.users });
+    addAuditLogEntry(`ui/users/create -> Added customer profile: ${nextUser.email}`);
     runAction("User created", `${nextUser.name} was added by ${selectedProfile.name}.`);
   };
 
@@ -995,8 +255,8 @@ const AdminPage = () => {
       state: "Draft",
     };
     setPlanRows((rows) => [nextPlan, ...rows]);
-    setEditingRecord({ kind: "policies", key: rowKeyFor(nextPlan), draft: { ...nextPlan } });
-    addAuditLogEntry(`/api/v4/policies/create -> Initialized draft plan: ${nextPlan.name}`);
+    setEditingRecord({ kind: "policies", key: rowKeyFor(nextPlan), draft: { ...nextPlan }, fields: editFieldsByKind.policies });
+    addAuditLogEntry(`ui/policies/create -> Initialized draft plan: ${nextPlan.name}`);
     runAction("Plan created", `${nextPlan.name} is ready for editing and approval.`);
   };
 
@@ -1015,14 +275,13 @@ const AdminPage = () => {
       docName: "Documents pending",
     };
     setClaimRows((rows) => [nextClaim, ...rows]);
-    setEditingRecord({ kind: "claims", key: rowKeyFor(nextClaim), draft: { ...nextClaim } });
-    addAuditLogEntry(`/api/v4/claims/create -> Opened claim sheet: ${nextClaim.id}`);
+    setEditingRecord({ kind: "claims", key: rowKeyFor(nextClaim), draft: { ...nextClaim }, fields: editFieldsByKind.claims });
+    addAuditLogEntry(`ui/claims/create -> Opened claim sheet: ${nextClaim.id}`);
     runAction("Claim created", `${nextClaim.id} was created. Add or edit customer name, policy, amount, documents, and notes before sending.`);
   };
 
   const createRequirement = () => {
     const nextRequirement = {
-      // FIX 7: customerRows is an array, use customerRows[0]?.name
       user: customerRows[0]?.name || "Customer",
       age: 30,
       budget: "INR 15,000",
@@ -1059,7 +318,7 @@ const AdminPage = () => {
         .slice(0, 2)
         .toUpperCase(),
     });
-    addAuditLogEntry(`/api/v4/profile/updateName -> Changed administrative label name to: ${nextSelected.name}`);
+    addAuditLogEntry(`ui/profile/updateName -> Changed administrative label name to: ${nextSelected.name}`);
     runAction("Admin name updated", `Admin name changed to ${nextSelected.name}.`);
   };
 
@@ -1079,14 +338,14 @@ const AdminPage = () => {
     updateAdminProfile({ password: passwordDraft.next });
     setPasswordDraft({ old: "", next: "", confirm: "" });
     setPasswordMessage("Password changed successfully.");
-    addAuditLogEntry(`/api/v4/profile/updatePassword -> Modified credentials passcode keys`);
+    addAuditLogEntry(`ui/profile/updatePassword -> Modified credentials passcode keys`);
     runAction("Admin password updated", `${selectedProfile.name} changed their password after old password verification.`);
   };
 
   const updateAdminPhoto = (file) => {
     fileToDataUrl(file, (profilePhoto) => {
       updateAdminProfile({ profilePhoto });
-      addAuditLogEntry(`/api/v4/profile/updatePhoto -> Modified account metadata visual layout profile avatar`);
+      addAuditLogEntry(`ui/profile/updatePhoto -> Modified account metadata visual layout profile avatar`);
       runAction("Admin photo updated", `${selectedProfile.name} uploaded a new profile photo.`);
     });
   };
@@ -1123,7 +382,7 @@ const AdminPage = () => {
       if (kind === "policies") persistPolicyRows(nextRows);
       return nextRows;
     });
-    addAuditLogEntry(`/api/v4/${kind}/${action} -> Executed action on item reference key ID: ${targetKey}`);
+    addAuditLogEntry(`ui/${kind}/${action} -> Executed action on item reference key ID: ${targetKey}`);
     runAction(
       action === "delete" ? "Deleted" : "Approved",
       `${targetKey} was ${action === "delete" ? "removed" : "approved"} by ${selectedProfile.name}.`,
@@ -1133,7 +392,7 @@ const AdminPage = () => {
   const respondToClaim = (claim) => {
     const message = `Dear ${claim.user}, your ${claim.policy} claim ${claim.id} is under review. Please keep your policy number, hospital bills, identity proof, and bank details ready.`;
     setClaimRows((rows) => rows.map((row) => (row.id === claim.id ? { ...row, status: "Under Review", response: message } : row)));
-    addAuditLogEntry(`/api/v4/claims/respond -> Forwarded manual procedural response guidelines message to ${claim.id}`);
+    addAuditLogEntry(`ui/claims/respond -> Forwarded manual procedural response guidelines message to ${claim.id}`);
     runAction("Response sent to user", {
       claimId: claim.id,
       user: claim.user,
@@ -1149,7 +408,7 @@ const AdminPage = () => {
     const reason = missing.length ? `Missing details: ${missing.join(", ")}` : "Rejected after verification due to incomplete claim evidence";
     setClaimRows((rows) => rows.map((row) => (row.id === claim.id ? { ...row, status: "Rejected", rejectionReason: reason } : row)));
     notifyClaimDecision({ claimId: claim.id, status: "Rejected", reason, adminName: selectedProfile.name });
-    addAuditLogEntry(`/api/v4/claims/reject -> Issued fallback state negative evaluation on: ${claim.id}`);
+    addAuditLogEntry(`ui/claims/reject -> Issued fallback state negative evaluation on: ${claim.id}`);
     runAction("Claim rejected", {
       claimId: claim.id,
       user: claim.user,
@@ -1178,11 +437,10 @@ const AdminPage = () => {
       saveSystemSettings(next);
       return next;
     });
-    addAuditLogEntry(`/api/v4/settings/update -> ${settingId}.${field.name}`);
+    addAuditLogEntry(`ui/settings/update -> ${settingId}.${field.name}`);
     runAction("Setting applied", `${field.label} updated in real time.`);
   };
 
-  // Developer note: structured setting editors use this helper to update nested template/gateway/form arrays safely.
   const updateStructuredSetting = (settingId, field, updater, actionLabel = field.label) => {
     const current = getSettingValue(settingId, field);
     const nextValue = typeof updater === "function" ? updater(current) : updater;
@@ -1202,305 +460,6 @@ const AdminPage = () => {
     setDetail({ title: card.title, body: card.description, photo: "" });
   };
 
-  const renderSettingField = (settingId, field) => {
-    const value = getSettingValue(settingId, field);
-
-    if (field.type === "boolean") {
-      return (
-        <label key={field.name} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4">
-          <span>
-            <span className="block text-sm font-black text-slate-800">{field.label}</span>
-            <span className="mt-1 block text-xs font-semibold text-slate-500">{value ? "Enabled" : "Disabled"}</span>
-          </span>
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            onChange={(event) => updateSettingModule(settingId, field, event.target.checked)}
-            className="h-5 w-5 cursor-pointer rounded border-slate-300"
-          />
-        </label>
-      );
-    }
-
-    if (field.type === "textarea") {
-      return (
-        <label key={field.name} className="block rounded-lg border border-slate-200 bg-white p-4">
-          <span className="text-xs font-black uppercase tracking-wide text-slate-500">{field.label}</span>
-          <textarea
-            value={value}
-            onChange={(event) => updateSettingModule(settingId, field, event.target.value)}
-            className="mt-2 min-h-32 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold outline-none focus:border-blue-500"
-          />
-        </label>
-      );
-    }
-
-    if (field.type === "templateList") {
-      const templates = Array.isArray(value) ? value : field.defaultValue;
-      return (
-        <div key={field.name} className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-black text-slate-950">{field.label}</div>
-              <div className="text-xs font-semibold text-slate-500">Policy, claim, payment, and renewal messages are editable here.</div>
-            </div>
-            <span className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">{templates.length} templates</span>
-          </div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            {templates.map((template, index) => (
-              <article key={template.key} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-black text-slate-900">{template.name}</div>
-                    <div className="mt-1 text-xs font-bold text-slate-500">{template.channel}</div>
-                  </div>
-                  <Mail size={18} className="text-blue-600" />
-                </div>
-                <label className="mt-4 block">
-                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">Subject</span>
-                  <input
-                    value={template.subject}
-                    onChange={(event) =>
-                      updateStructuredSetting("notifications", field, (items) =>
-                        items.map((item, itemIndex) => (itemIndex === index ? { ...item, subject: event.target.value } : item)),
-                      )
-                    }
-                    className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-blue-500"
-                  />
-                </label>
-                <label className="mt-3 block">
-                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">Body</span>
-                  <textarea
-                    value={template.body}
-                    onChange={(event) =>
-                      updateStructuredSetting("notifications", field, (items) =>
-                        items.map((item, itemIndex) => (itemIndex === index ? { ...item, body: event.target.value } : item)),
-                      )
-                    }
-                    className="mt-2 min-h-24 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-blue-500"
-                  />
-                </label>
-              </article>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    if (field.type === "gatewayList") {
-      const gateways = Array.isArray(value) ? value : field.defaultValue;
-      return (
-        <div key={field.name} className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
-          <div className="text-sm font-black text-slate-950">{field.label}</div>
-          <div className="mt-1 text-xs font-semibold text-slate-500">Enabled gateways appear automatically on checkout.</div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            {gateways.map((gateway, index) => (
-              <article key={gateway.key} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-black text-slate-900">{gateway.name}</div>
-                    <div className="mt-1 text-xs font-bold text-slate-500">{gateway.settlement}</div>
-                  </div>
-                  <label className="inline-flex items-center gap-2 text-xs font-black text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(gateway.enabled)}
-                      onChange={(event) =>
-                        updateStructuredSetting("payment", field, (items) =>
-                          items.map((item, itemIndex) => (itemIndex === index ? { ...item, enabled: event.target.checked } : item)),
-                        )
-                      }
-                      className="h-5 w-5 rounded border-slate-300"
-                    />
-                    {gateway.enabled ? "Enabled" : "Disabled"}
-                  </label>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">Mode</span>
-                    <select
-                      value={gateway.mode}
-                      onChange={(event) =>
-                        updateStructuredSetting("payment", field, (items) =>
-                          items.map((item, itemIndex) => (itemIndex === index ? { ...item, mode: event.target.value } : item)),
-                        )
-                      }
-                      className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-blue-500"
-                    >
-                      {["Test", "Live", "Sandbox", "Manual"].map((option) => <option key={option}>{option}</option>)}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">Merchant ID</span>
-                    <input
-                      value={gateway.merchantId}
-                      onChange={(event) =>
-                        updateStructuredSetting("payment", field, (items) =>
-                          items.map((item, itemIndex) => (itemIndex === index ? { ...item, merchantId: event.target.value } : item)),
-                        )
-                      }
-                      className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-blue-500"
-                    />
-                  </label>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    if (field.type === "policyFormBuilder") {
-      const forms = value && typeof value === "object" ? value : field.defaultValue;
-      return (
-        <div key={field.name} className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
-          <div className="text-sm font-black text-slate-950">{field.label}</div>
-          <div className="mt-1 text-xs font-semibold text-slate-500">Health and Vehicle fields can be renamed, typed, required, and extended.</div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            {Object.entries(forms).map(([formKey, fields]) => (
-              <article key={formKey} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-black capitalize text-slate-900">{formKey} Policy</div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateStructuredSetting("forms", field, (currentForms) => ({
-                        ...currentForms,
-                        [formKey]: [
-                          ...(currentForms[formKey] || []),
-                          { key: `customField${Date.now()}`, label: "New Field", type: "text", required: false },
-                        ],
-                      }))
-                    }
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-black text-white hover:bg-blue-700"
-                  >
-                    <Plus size={14} />
-                    Add Field
-                  </button>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {fields.map((formField, index) => (
-                    <div key={formField.key} className="rounded-lg border border-slate-200 bg-white p-3">
-                      <div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
-                        <input
-                          value={formField.label}
-                          onChange={(event) =>
-                            updateStructuredSetting("forms", field, (currentForms) => ({
-                              ...currentForms,
-                              [formKey]: currentForms[formKey].map((item, itemIndex) => (itemIndex === index ? { ...item, label: event.target.value } : item)),
-                            }))
-                          }
-                          className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold outline-none focus:border-blue-500"
-                        />
-                        <select
-                          value={formField.type}
-                          onChange={(event) =>
-                            updateStructuredSetting("forms", field, (currentForms) => ({
-                              ...currentForms,
-                              [formKey]: currentForms[formKey].map((item, itemIndex) => (itemIndex === index ? { ...item, type: event.target.value } : item)),
-                            }))
-                          }
-                          className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-bold outline-none focus:border-blue-500"
-                        >
-                          {["text", "number", "select", "date", "textarea"].map((option) => <option key={option}>{option}</option>)}
-                        </select>
-                        <label className="inline-flex h-10 items-center gap-2 text-xs font-black text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(formField.required)}
-                            onChange={(event) =>
-                              updateStructuredSetting("forms", field, (currentForms) => ({
-                                ...currentForms,
-                                [formKey]: currentForms[formKey].map((item, itemIndex) => (itemIndex === index ? { ...item, required: event.target.checked } : item)),
-                              }))
-                            }
-                            className="h-4 w-4 rounded border-slate-300"
-                          />
-                          Required
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    if (field.type === "featureMatrix") {
-      const featureGroups = value && typeof value === "object" ? value : field.defaultValue;
-      return (
-        <div key={field.name} className="rounded-lg border border-slate-200 bg-white p-4 xl:col-span-2">
-          <div className="text-sm font-black text-slate-950">{field.label}</div>
-          <div className="mt-1 text-xs font-semibold text-slate-500">Add-ons are stored by insurance line and ready for plan mapping.</div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            {Object.entries(featureGroups).map(([groupKey, features]) => (
-              <article key={groupKey} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="text-sm font-black capitalize text-slate-900">{groupKey} Insurance</div>
-                <textarea
-                  value={features.join("\n")}
-                  onChange={(event) =>
-                    updateStructuredSetting("features", field, (groups) => ({
-                      ...groups,
-                      [groupKey]: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean),
-                    }))
-                  }
-                  className="mt-3 min-h-36 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-blue-500"
-                />
-              </article>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    if (field.type === "select") {
-      return (
-        <label key={field.name} className="block rounded-lg border border-slate-200 bg-white p-4">
-          <span className="text-xs font-black uppercase tracking-wide text-slate-500">{field.label}</span>
-          <select
-            value={value}
-            onChange={(event) => updateSettingModule(settingId, field, event.target.value)}
-            className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-bold outline-none focus:border-blue-500"
-          >
-            {field.options.map((option) => <option key={option}>{option}</option>)}
-          </select>
-        </label>
-      );
-    }
-
-    if (field.type === "file") {
-      return (
-        <div key={field.name} className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="text-xs font-black uppercase tracking-wide text-slate-500">{field.label}</div>
-          {value ? (
-            <img src={value} alt={field.label} className="mt-3 h-20 w-20 rounded-lg border border-slate-200 object-contain" />
-          ) : (
-            <div className="mt-3 grid h-20 w-20 place-items-center rounded-lg border border-dashed border-slate-300 text-xs font-bold text-slate-400">No file</div>
-          )}
-          <label className="mt-3 inline-flex cursor-pointer items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700">
-            Upload
-            <input type="file" accept={field.accept} className="hidden" onChange={(event) => updateSettingFile(settingId, field, event.target.files?.[0])} />
-          </label>
-        </div>
-      );
-    }
-
-    return (
-      <label key={field.name} className="block rounded-lg border border-slate-200 bg-white p-4">
-        <span className="text-xs font-black uppercase tracking-wide text-slate-500">{field.label}</span>
-        <input
-          type={field.type}
-          value={value}
-          onChange={(event) => updateSettingModule(settingId, field, field.type === "number" ? Number(event.target.value) : event.target.value)}
-          className="mt-2 h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-bold outline-none focus:border-blue-500"
-        />
-      </label>
-    );
-  };
-
   const actionButtons = (target, kind) => (
     <div className="flex gap-1">
       <ActionButton
@@ -1509,7 +468,21 @@ const AdminPage = () => {
         onClick={() =>
           runAction(
             `Viewing ${target.id || target.name || target.user}`,
-            kind === "users" ? readUserActivity(target, claimRows) : target,
+            kind === "users" ? {
+              profile: target.name,
+              email: target.email,
+              phone: target.phone,
+              city: target.city,
+              address: target.address || "Not added",
+              loginStatus: target.status,
+              policiesPurchased: target.policies || 0,
+              claimsSubmitted: claimRows.filter((claim) => claim.user === target.name || claim.email === target.email).length,
+              claimSummary: claimRows.filter((claim) => claim.user === target.name || claim.email === target.email).map((claim) => `${claim.id} - ${claim.policy} - ${claim.status}`).join("; ") || "No claims found for this user",
+              paymentsMade: 0,
+              documentsUploaded: 0,
+              documents: "No uploaded documents found",
+              recentActivity: target.status === "Logged In" ? "Currently logged in to the user portal" : "Registered user profile available",
+            } : target,
             kind === "users" ? target.profilePhoto : "",
           )
         }
@@ -1520,922 +493,11 @@ const AdminPage = () => {
     </div>
   );
 
-  // Developer note: shared editor for every row-level Edit/Create action in admin tables/cards.
-  const renderEditPanel = () => {
-    if (!editingRecord) return null;
-    const fields = editFieldsByKind[editingRecord.kind] || Object.keys(editingRecord.draft);
-
-    return (
-      <section className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="text-sm font-black text-blue-950">Edit {editingRecord.kind}</div>
-            <div className="mt-1 text-xs font-bold text-blue-700">Make changes, save locally, or send the edited details back to the user.</div>
-          </div>
-          <button onClick={() => setEditingRecord(null)} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
-            <X size={14} />
-            Close
-          </button>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {fields.map((field) => (
-            <label key={field} className="block">
-              <span className="text-xs font-black uppercase tracking-wide text-blue-700">{field.replace(/([A-Z])/g, " $1")}</span>
-              <input
-                value={editingRecord.draft[field] ?? ""}
-                onChange={(event) =>
-                  setEditingRecord((record) => ({
-                    ...record,
-                    draft: {
-                      ...record.draft,
-                      [field]: field === "policies" || field === "age" ? Number(event.target.value) : event.target.value,
-                    },
-                  }))
-                }
-                className="mt-2 h-11 w-full rounded-lg border border-blue-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
-              />
-            </label>
-          ))}
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button onClick={saveEditedRecord} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700">
-            Save Changes
-          </button>
-          <button onClick={sendEditedRecordToUser} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-black text-white hover:bg-emerald-700">
-            <Send size={15} />
-            Send to User
-          </button>
-        </div>
-      </section>
-    );
-  };
-
-  // Developer note: audit tabs are split by this classifier. Update keywords if audit action names change.
-  const isLoginAudit = (log) => {
-    const action = log.action.toLowerCase();
-    return action.includes("login") || action.includes("auth");
-  };
-
-  const visibleAuditLogs = auditLogs.filter((log) => (auditFilter === "login" ? isLoginAudit(log) : !isLoginAudit(log)));
-
-  const formatAuditActionLabel = (action) => {
-    const [, rawAction = action] = String(action).split("->").map((part) => part.trim());
-    const endpoint = String(action).split("->")[0] || "";
-    const endpointParts = endpoint.split("/").filter(Boolean);
-    const moduleName = endpointParts[2] || endpointParts[1] || "system";
-    const operationName = endpointParts[3] || "activity";
-    const readableModule = moduleName.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
-    const readableOperation = operationName.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
-    return `${readableModule} ${readableOperation}: ${rawAction}`;
-  };
-
   const openReportDetail = (report) => {
     setSelectedReport(report);
     setEditingRecord(null);
     setActivePage("report-detail");
     setDetail({ title: report, body: `${report} opened with current admin data.`, photo: "" });
-  };
-
-  const renderDashboard = () => (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
-              <ShieldCheck size={16} />
-              Centralized admin control
-            </div>
-            <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Insurance Admin Dashboard</h1>
-            <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-600">
-              Manage users, policies, claims, queries, requirements, document verification, notifications, reports, and operations from one console.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-black text-slate-950">Current Admin Profile</div>
-                <div className="mt-1 text-xs font-semibold text-slate-500">{selectedProfile.access}</div>
-              </div>
-              <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-600 text-sm font-black text-white">{selectedProfile.initials}</span>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-bold text-slate-600">
-              {["Email / Username", "Password", "Remember Me", "Forgot Password", "OTP 2FA"].map((label) => (
-                <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-2">{label}</div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-        {dashboardMetrics.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button key={item.label} onClick={() => openPage(item.page)} className="rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-              <div className="flex items-start justify-between gap-3">
-                <span className={`grid h-10 w-10 place-items-center rounded-lg ${item.tone} text-white`}>
-                  <Icon size={18} />
-                </span>
-                <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-600">{item.change}</span>
-              </div>
-              <div className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">{item.label}</div>
-              <div className="mt-1 text-xl font-black text-slate-950">{item.value}</div>
-            </button>
-          );
-        })}
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={PieChart} title="Claims Status Overview" />
-          <div className="mt-5 grid gap-5 sm:grid-cols-[180px_1fr]">
-            <div className="relative mx-auto aspect-square w-40 rounded-full" style={{ background: "conic-gradient(#2563eb 0 42%, #10b981 42% 70%, #ef4444 70% 84%, #f59e0b 84% 100%)" }}>
-              <div className="absolute inset-6 grid place-items-center rounded-full bg-white text-center">
-                <span className="text-2xl font-black">6.1K</span>
-                <span className="-mt-3 text-[11px] font-bold text-slate-500">claims</span>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {[["Pending", "42%", "bg-blue-600"], ["Approved", "28%", "bg-emerald-500"], ["Rejected", "14%", "bg-rose-500"], ["Verification", "16%", "bg-amber-500"]].map(([label, value, color]) => (
-                <button key={label} onClick={() => openPage("claims")} className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold hover:bg-slate-50">
-                  <span className="flex items-center gap-2"><span className={`h-3 w-3 rounded-sm ${color}`} />{label}</span>
-                  <span>{value}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={LineChart} title="Monthly Policy Sales" />
-          <div className="mt-5">
-            {/* FIX 8: Provided actual array values for MiniBars */}
-            <MiniBars values={[55, 70, 45, 85, 60, 75, 50, 90, 65, 80, 70, 95]} />
-          </div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={Users} title="User Registration Trends" />
-          <div className="mt-5">
-            {/* FIX 9: Provided actual array values for LineSpark */}
-            <LineSpark values={[30, 55, 40, 70, 50, 85, 60, 75, 45, 90, 65, 80]} color="#0f766e" />
-          </div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={BarChart3} title="Claim Settlement Ratio" />
-          <div className="mt-5 grid grid-cols-3 gap-3">
-            {[["Settled", "78%", "text-emerald-700"], ["In SLA", "91%", "text-blue-700"], ["Escalated", "6%", "text-rose-700"]].map(([label, value, color]) => (
-              <button key={label} onClick={() => openPage("reports")} className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center hover:bg-white">
-                <div className={`text-2xl font-black ${color}`}>{value}</div>
-                <div className="mt-1 text-xs font-bold text-slate-500">{label}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-
-  const renderPage = () => {
-    if (activePage === "dashboard") return renderDashboard();
-    if (activePage === "users") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle
-            icon={Users}
-            title="User Management"
-            action={
-              <div className="flex flex-wrap gap-2">
-                <button onClick={refreshRealUsers} className="cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-sm font-black text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">Refresh Real Users</button>
-                <button onClick={createCustomer} className="cursor-pointer rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white transition hover:bg-blue-700">Create User</button>
-              </div>
-            }
-          />
-          <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800">
-            Showing real app profiles from registration/login storage. Active users: {activeUsers}.
-          </div>
-          <DataTable columns={["id", "name", "email", "phone", "address", "policies", "status", "city"]} rows={customerRows} renderActions={(row) => actionButtons(row, "users")} />
-        </section>
-      );
-    }
-    if (activePage === "claims") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={ClipboardCheck} title="Claims Management" action={<button onClick={createClaim} className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white transition hover:bg-blue-700"><Plus size={16} />Create Claim</button>} />
-          <DataTable columns={["id", "user", "policy", "amount", "status", "officer"]} rows={claimRows} renderActions={(row) => (
-            <div className="flex flex-wrap gap-1">
-              {actionButtons(row, "claims")}
-              <button onClick={() => respondToClaim(row)} className="rounded-lg border border-slate-200 px-2 py-2 text-xs font-black text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
-                Respond
-              </button>
-              <button onClick={() => rejectClaimForMissingDetails(row)} className="rounded-lg border border-rose-200 px-2 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-50">
-                Reject Missing
-              </button>
-            </div>
-          )} />
-          <div className="mt-5 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
-            {claimSteps.map((step, index) => (
-              <button key={step} onClick={() => runAction("Claim workflow", step)} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-left hover:bg-white">
-                <div className="text-xs font-black text-blue-700">Step {index + 1}</div>
-                <div className="mt-1 text-sm font-bold text-slate-700">{step}</div>
-              </button>
-            ))}
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "requirements") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={BadgeCheck} title="Requirement Management" action={<button onClick={createRequirement} className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white transition hover:bg-blue-700"><Plus size={16} />Create Requirement</button>} />
-          <div className="mt-5 grid gap-4 lg:grid-cols-3">
-            {requirementRows.map((req) => (
-              <article key={req.user} className="rounded-lg border border-slate-200 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-black">{req.user}</div>
-                    <div className="mt-1 text-xs font-semibold text-slate-500">Age {req.age} - {req.budget} - {req.coverage}</div>
-                  </div>
-                  <span className={`rounded-lg px-2 py-1 text-xs font-black ring-1 ${statusClass(req.status)}`}>{req.status}</span>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {["Edit", "Suggest Policies", "Generate Quotes", "Approve", "Delete"].map((action) => (
-                    <button key={action} onClick={() => action === "Edit" ? startEditRecord("requirements", req) : action === "Approve" ? mutateRows("requirements", req, "approve") : action === "Delete" ? mutateRows("requirements", req, "delete") : runAction(action, `${action} for ${req.user}.`)} className="cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-xs font-black transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">{action}</button>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "support") {
-      const handleReplyToChat = () => {
-        if (!selectedChat || !adminReply.trim()) return;
-
-        const nextMessage = {
-          id: `msg_${Date.now()}`,
-          from: "admin",
-          sender: selectedProfile.name,
-          text: adminReply,
-          createdAt: new Date().toISOString(),
-        };
-
-        const nextChats = supportChats.map((chat) =>
-          chat.id === selectedChat.id
-            ? { ...chat, messages: [...chat.messages, nextMessage], updatedAt: new Date().toISOString() }
-            : chat,
-        );
-
-        setSupportChats(nextChats);
-        saveSupportChats(nextChats);
-        setSelectedChat({ ...selectedChat, messages: [...selectedChat.messages, nextMessage] });
-        setAdminReply("");
-        addAuditLogEntry(`/api/v4/support/reply -> Dispatched message feedback interaction thread to ${selectedChat.userName}`);
-        runAction("Reply sent", `Admin response sent to ${selectedChat.userName}.`);
-      };
-
-      const resolveChat = () => {
-        if (!selectedChat) return;
-        const nextChats = supportChats.map((chat) =>
-          chat.id === selectedChat.id ? { ...chat, status: "Resolved", updatedAt: new Date().toISOString() } : chat,
-        );
-        setSupportChats(nextChats);
-        saveSupportChats(nextChats);
-        addAuditLogEntry(`/api/v4/support/resolve -> Handled ticket solution verification closure for ${selectedChat.userName}`);
-        setSelectedChat(null);
-        runAction("Chat resolved", `Support ticket for ${selectedChat.userName} marked as resolved.`);
-      };
-
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={Headphones} title="Support Center - User Chats" />
-          <div className="mt-5 grid gap-4 xl:grid-cols-[300px_1fr]">
-            <div className="max-h-[600px] space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-4">
-              {supportChats.length === 0 ? (
-                <div className="text-sm font-semibold text-slate-500">No support chats yet.</div>
-              ) : (
-                supportChats.map((chat) => (
-                  <button
-                    key={chat.id}
-                    onClick={() => {
-                      setSelectedChat(chat);
-                      runAction(`Viewing chat: ${chat.id}`, {
-                        user: chat.userName,
-                        email: chat.userEmail,
-                        subject: chat.subject,
-                        status: chat.status,
-                        messages: `${chat.messages.length} messages`,
-                      });
-                    }}
-                    className={`w-full rounded-lg border p-3 text-left transition ${
-                      selectedChat?.id === chat.id
-                        ? "border-blue-400 bg-blue-50"
-                        : "border-slate-200 bg-white hover:border-blue-300"
-                    }`}
-                  >
-                    <div className="text-sm font-bold text-slate-900">{chat.userName}</div>
-                    <div className="text-xs text-slate-500">{chat.subject}</div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className={`rounded px-2 py-1 text-xs font-bold ${statusClass(chat.status)}`}>
-                        {chat.status}
-                      </span>
-                      <span className="text-xs text-slate-500">{chat.messages.length} msg</span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-
-            <div className="rounded-lg border border-slate-200">
-              {!selectedChat ? (
-                <div className="flex h-[600px] items-center justify-center text-slate-500">
-                  <p>Select a chat to view messages</p>
-                </div>
-              ) : (
-                <div className="flex h-[600px] flex-col">
-                  <div className="border-b border-slate-200 p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-bold text-slate-900">{selectedChat.userName}</div>
-                        <div className="text-xs text-slate-500">{selectedChat.userEmail}</div>
-                        <div className="mt-1 text-xs font-semibold text-slate-600">{selectedChat.subject}</div>
-                      </div>
-                      <span className={`rounded-lg px-3 py-1 text-xs font-bold ${statusClass(selectedChat.status)}`}>
-                        {selectedChat.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 space-y-3 overflow-y-auto p-4">
-                    {selectedChat.messages.map((msg) => (
-                      <div key={msg.id}>
-                        <div className="text-xs font-bold uppercase text-slate-500">{msg.sender}</div>
-                        <div
-                          className={`mt-1 rounded-lg px-4 py-3 text-sm font-semibold ${
-                            msg.from === "admin"
-                              ? "bg-blue-50 text-blue-900"
-                              : "bg-slate-100 text-slate-700"
-                          }`}
-                        >
-                          {msg.text}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {selectedChat.status !== "Resolved" && (
-                    <div className="border-t border-slate-200 p-4 space-y-3">
-                      <input
-                        value={adminReply}
-                        onChange={(e) => setAdminReply(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleReplyToChat()}
-                        placeholder="Type your reply..."
-                        className="h-12 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-blue-500"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleReplyToChat}
-                          className="flex-1 inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700"
-                        >
-                          <Send size={16} />
-                          Send Reply
-                        </button>
-                        <button
-                          onClick={resolveChat}
-                          className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
-                        >
-                          <CheckCircle2 size={16} />
-                          Resolve
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "policies") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={FileText} title="Policy Management" action={<button onClick={createPlan} className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-black text-white transition hover:bg-blue-700"><Plus size={16} />Create Plan</button>} />
-          <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800">
-            Admin-created active policies are saved to the shared catalog and become visible on public product pages.
-          </div>
-          <DataTable columns={["name", "company", "categorySlug", "coverage", "premiumYearly", "offer", "renewalDate", "state"]} rows={planRows} renderActions={(row) => actionButtons(row, "policies")} />
-        </section>
-      );
-    }
-    if (activePage === "documents") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={ShieldCheck} title="Document Verification" />
-          <div className="mt-5 grid gap-5 2xl:grid-cols-[360px_1fr]">
-            <div className="space-y-3">
-              {documentRows.map((doc) => {
-                const docKey = `${doc.type}-${doc.owner}`;
-                return (
-                  <article key={docKey} className={`rounded-lg border p-4 ${currentDocumentKey === docKey ? "border-blue-300 bg-blue-50" : "border-slate-200"}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-black">{doc.type}</div>
-                        <div className="mt-1 text-sm font-semibold text-slate-500">{doc.owner}</div>
-                        {doc.note && <div className="mt-2 text-xs font-bold text-rose-700">{doc.note}</div>}
-                      </div>
-                      <span className={`rounded-lg px-2 py-1 text-xs font-black ring-1 ${statusClass(doc.status)}`}>{doc.status}</span>
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <button
-                        onClick={() => {
-                          setSelectedDocument(doc);
-                          runAction("Document opened", `${doc.type} for ${doc.owner} is ready for admin markup.`);
-                        }}
-                        className="cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-xs font-black transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-                      >
-                        View
-                      </button>
-                      <button onClick={() => startEditRecord("documents", doc)} className="cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-xs font-black transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">Edit</button>
-                      <button onClick={() => mutateRows("documents", doc, "approve")} className="cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-xs font-black transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">Approve</button>
-                      <button onClick={() => mutateRows("documents", doc, "delete")} className="cursor-pointer rounded-lg border border-rose-200 px-3 py-2 text-xs font-black text-rose-700 transition hover:bg-rose-50">Reject</button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-              {selectedDocument ? (
-                <>
-                  <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <div className="text-sm font-black text-slate-950">{selectedDocument.type} Review</div>
-                      <div className="mt-1 text-xs font-bold text-slate-500">{selectedDocument.owner}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { id: "pen", label: "Pen", icon: PenLine },
-                        { id: "circle", label: "Circle", icon: Circle },
-                        { id: "eraser", label: "Eraser", icon: Eraser },
-                      ].map((tool) => {
-                        const ToolIcon = tool.icon;
-                        return (
-                          <button
-                            key={tool.id}
-                            onClick={() => setMarkupTool(tool.id)}
-                            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-black transition ${
-                              markupTool === tool.id ? "border-blue-300 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                            }`}
-                          >
-                            <ToolIcon size={14} />
-                            {tool.label}
-                          </button>
-                        );
-                      })}
-                      <button onClick={undoDocumentMark} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
-                        <Undo2 size={14} />
-                        Undo
-                      </button>
-                      <button onClick={sendDocumentCorrection} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">
-                        <Send size={14} />
-                        Send Back
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <div className="relative mx-auto aspect-[4/5] max-w-3xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                      <div className="absolute inset-0 bg-white">
-                        {selectedDocument.dataUrl ? (
-                          selectedDocument.mimeType?.startsWith("image/") ? (
-                            <img src={selectedDocument.dataUrl} alt={selectedDocument.type} className="h-full w-full object-contain" />
-                          ) : (
-                            <iframe title={selectedDocument.type} src={selectedDocument.dataUrl} className="h-full w-full border-0" />
-                          )
-                        ) : (
-                          <div className="h-full p-8">
-                            <div className="border-b border-slate-200 pb-4">
-                              <div className="text-xs font-black uppercase tracking-wide text-blue-700">Submitted User Document</div>
-                              <div className="mt-2 text-2xl font-black text-slate-950">{selectedDocument.type}</div>
-                              <div className="mt-1 text-sm font-bold text-slate-500">Owner: {selectedDocument.owner}</div>
-                            </div>
-                            <div className="mt-6 grid gap-3 text-sm font-semibold text-slate-600">
-                              {["Identity fields verified against user profile.", "Policy or claim reference checked by admin.", "Missing or incorrect areas can be circled before sending back.", "User receives the correction request after Send Back."].map((line, index) => (
-                                <div key={line} className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3">
-                                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-900 text-xs font-black text-white">{index + 1}</span>
-                                  {line}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <svg
-                        className="absolute inset-0 h-full w-full touch-none"
-                        viewBox="0 0 100 100"
-                        preserveAspectRatio="none"
-                        onPointerDown={startMarkup}
-                        onPointerMove={continueMarkup}
-                        onPointerUp={finishMarkup}
-                      >
-                        {[...currentDocumentMarks, ...(draftMark ? [draftMark] : [])].map((mark) => {
-                          if (mark.tool === "circle") {
-                            const [start, end = start] = mark.points;
-                            const x = Math.min(start.x, end.x);
-                            const y = Math.min(start.y, end.y);
-                            const width = Math.max(Math.abs(end.x - start.x), 2);
-                            const height = Math.max(Math.abs(end.y - start.y), 2);
-                            return <ellipse key={mark.id} cx={x + width / 2} cy={y + height / 2} rx={width / 2} ry={height / 2} fill="none" stroke={mark.color} strokeWidth="1.2" />;
-                          }
-                          return <polyline key={mark.id} fill="none" stroke={mark.color} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.2" points={mark.points.map((point) => `${point.x},${point.y}`).join(" ")} />;
-                        })}
-                      </svg>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="grid min-h-[420px] place-items-center rounded-lg border border-dashed border-slate-300 bg-white text-center">
-                  <div>
-                    <div className="text-sm font-black text-slate-800">Select a document</div>
-                    <div className="mt-1 text-xs font-semibold text-slate-500">Use View to open the markup workspace.</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "notifications") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={Bell} title="Notification Center" />
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            {["Policy Issued", "Policy Approved", "Claim Submitted", "Claim Approved", "Claim Rejected", "Payment Received", "Renewal Reminder"].map((type) => (
-              <button
-                key={type}
-                onClick={() => {
-                  addAuditLogEntry(`/api/v4/notifications/template -> Selected notification template: ${type}`);
-                  runAction("Notification template", `${type} template is ready to edit or send from the selected channel.`);
-                }}
-                className="rounded-lg border border-slate-200 p-4 text-left font-black transition hover:border-blue-200 hover:bg-blue-50"
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {["Email", "SMS", "Push Notifications"].map((channel) => (
-              <button key={channel} onClick={() => runAction("Channel selected", `${channel} channel enabled.`)} className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">{channel}</button>
-            ))}
-            <button
-              onClick={() => {
-                addAuditLogEntry(`/api/v4/notifications/send -> Queued notification broadcast from admin center`);
-                runAction("Notification sent", "Selected notification has been queued for active users.");
-              }}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-black text-white"
-            >
-              <Send size={15} />Send
-            </button>
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "reports") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={BarChart3} title="Reports & Analytics" />
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {["Claims Report", "Revenue Report", "User Growth Report", "Policy Sales Report", "Agent Performance Report"].map((report) => (
-              <button key={report} onClick={() => openReportDetail(report)} className="rounded-lg border border-slate-200 p-4 text-left font-black transition hover:border-blue-200 hover:bg-blue-50">{report}</button>
-            ))}
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {["PDF", "Excel", "CSV"].map((format) => (
-              <button key={format} onClick={() => runAction("Export ready", `${format} export generated.`)} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-black hover:bg-slate-50"><Download size={15} />{format}</button>
-            ))}
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "profile") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={UserCog} title="Admin Profile" />
-          <div className="mt-5 grid gap-5 xl:grid-cols-[360px_1fr]">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-              {selectedProfile.profilePhoto ? (
-                <img src={selectedProfile.profilePhoto} alt={selectedProfile.name} className="h-20 w-20 rounded-lg object-cover" />
-              ) : (
-                <span className="grid h-20 w-20 place-items-center rounded-lg bg-blue-600 text-lg font-black text-white">{selectedProfile.initials}</span>
-              )}
-              <div className="mt-4 text-xl font-black text-slate-950">{selectedProfile.name}</div>
-              <div className="mt-1 text-sm font-bold text-slate-500">{selectedProfile.role}</div>
-              <div className="mt-4 rounded-lg bg-white p-3 text-sm font-semibold text-slate-600">{selectedProfile.access}</div>
-              <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700">
-                Upload Photo
-                {/* FIX 10: Fixed optional chaining — files?.[0] instead of files?. */}
-                <input type="file" accept="image/*" className="hidden" onChange={(event) => updateAdminPhoto(event.target.files?.[0])} />
-              </label>
-            </div>
-
-            <div className="space-y-5">
-              <div className="rounded-lg border border-slate-200 p-5">
-                <div className="text-sm font-black text-slate-950">Edit Admin Details</div>
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <label className="block">
-                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">Admin Name</span>
-                    <input
-                      className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-bold outline-none focus:border-blue-500"
-                      value={adminNameDraft}
-                      onChange={(event) => setAdminNameDraft(event.target.value)}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-black uppercase tracking-wide text-slate-500">Unique Admin ID</span>
-                    <input
-                      className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-bold outline-none focus:border-blue-500"
-                      value={selectedProfile.adminId}
-                      onChange={(event) => updateAdminProfile({ adminId: event.target.value })}
-                    />
-                  </label>
-                </div>
-                <button onClick={saveAdminName} className="mt-4 rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700">
-                  Save Profile
-                </button>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 p-5">
-                <div className="text-sm font-black text-slate-950">Change Password</div>
-                <div className="mt-1 text-xs font-semibold text-slate-500">Enter old password, new password, and confirm password.</div>
-                <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <label className="block">
-                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">Old Password</span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-bold outline-none focus:border-blue-500"
-                    type={showAdminProfilePassword ? "text" : "password"}
-                    value={passwordDraft.old}
-                    onChange={(event) => setPasswordDraft((draft) => ({ ...draft, old: event.target.value }))}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">New Password</span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-bold outline-none focus:border-blue-500"
-                    type={showAdminProfilePassword ? "text" : "password"}
-                    value={passwordDraft.next}
-                    onChange={(event) => setPasswordDraft((draft) => ({ ...draft, next: event.target.value }))}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">Confirm Password</span>
-                  <input
-                    className="mt-2 h-12 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-bold outline-none focus:border-blue-500"
-                    type={showAdminProfilePassword ? "text" : "password"}
-                    value={passwordDraft.confirm}
-                    onChange={(event) => setPasswordDraft((draft) => ({ ...draft, confirm: event.target.value }))}
-                  />
-                </label>
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button type="button" onClick={() => setShowAdminProfilePassword((value) => !value)} className="rounded-lg border border-slate-200 px-4 py-3 text-sm font-black text-blue-700 hover:bg-blue-50">
-                    {showAdminProfilePassword ? "Hide Passwords" : "Show Passwords"}
-                  </button>
-                  <button onClick={saveAdminPassword} className="rounded-lg bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700">
-                    Change Password
-                  </button>
-                </div>
-                {passwordMessage && <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">{passwordMessage}</div>}
-              </div>
-            </div>
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "auditlog") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-5">
-            <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700">
-                <ScrollText size={18} />
-              </span>
-              <div>
-                <h2 className="text-base font-black text-slate-950">Audit Log</h2>
-                <p className="text-xs font-semibold text-slate-500 mt-0.5">
-                  Complete activity trail — login events and all admin actions
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                localStorage.removeItem(STORAGE_AUDIT_LOGS);
-                setAuditLogs(defaultAuditLogs);
-                runAction("Audit log reset", "Audit trail has been reset to defaults.");
-              }}
-              className="text-xs font-black text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-lg border border-slate-200 transition"
-            >
-              Reset Logs
-            </button>
-          </div>
-
-          <div className="mt-5 grid grid-cols-3 gap-4">
-            {[
-              { label: "Total Events", value: auditLogs.length, color: "text-blue-700", bg: "bg-blue-50" },
-              { label: "Login Events", value: auditLogs.filter(isLoginAudit).length, color: "text-emerald-700", bg: "bg-emerald-50" },
-              { label: "Insurance Events", value: auditLogs.filter((log) => !isLoginAudit(log)).length, color: "text-amber-700", bg: "bg-amber-50" },
-            ].map((stat) => (
-              <div key={stat.label} className={`rounded-lg ${stat.bg} p-4`}>
-                <div className={`text-2xl font-black ${stat.color}`}>{stat.value}</div>
-                <div className="mt-1 text-xs font-bold text-slate-600">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {[
-              { id: "login", label: "Login Audit" },
-              { id: "insurance", label: "Claim, Policy, User & Insurance Audit" },
-            ].map((filter) => (
-              <button
-                key={filter.id}
-                onClick={() => setAuditFilter(filter.id)}
-                className={`rounded-lg px-4 py-2 text-sm font-black transition ${
-                  auditFilter === filter.id ? "bg-blue-600 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
-            <table className="w-full min-w-[700px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-black">#</th>
-                  <th className="px-4 py-3 font-black">Action Event</th>
-                  <th className="px-4 py-3 font-black">Operator</th>
-                  <th className="px-4 py-3 font-black">Timestamp</th>
-                  <th className="px-4 py-3 font-black">Type</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {visibleAuditLogs.map((log, index) => {
-                  const isLogin = isLoginAudit(log);
-                  return (
-                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3.5 text-xs font-black text-slate-400">{index + 1}</td>
-                      <td className="px-4 py-3.5 text-xs font-semibold text-blue-900 max-w-xs">
-                        <div className="truncate font-black">{formatAuditActionLabel(log.action)}</div>
-                        <div className="mt-1 truncate font-mono text-[11px] text-slate-400">{log.action}</div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-slate-900 text-[10px] font-black text-white">
-                            {log.initials}
-                          </span>
-                          <span className="font-semibold text-slate-700 text-xs">{log.username}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs font-bold text-slate-500">
-                        {new Date(log.createdAt).toLocaleDateString("en-IN", {
-                          day: "2-digit",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span
-                          className={`rounded-lg px-2 py-1 text-xs font-black ring-1 ${
-                            isLogin
-                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                              : "bg-blue-50 text-blue-700 ring-blue-200"
-                          }`}
-                        >
-                          {isLogin ? "Login" : "Action"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {visibleAuditLogs.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-sm font-bold text-slate-500">
-                      No {auditFilter === "login" ? "login" : "insurance activity"} audit records yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "report-detail") {
-      const report = selectedReport || "Analytics Report";
-      const reportStats = [
-        { label: "Total Users", value: customerRows.length },
-        { label: "Policies", value: planRows.length },
-        { label: "Claims", value: claimRows.length },
-        { label: "Payments", value: "INR 8.42 Cr" },
-      ];
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle
-            icon={BarChart3}
-            title={report}
-            action={
-              <button onClick={() => openPage("reports")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
-                <ArrowLeft size={16} />
-                Back to Reports
-              </button>
-            }
-          />
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {reportStats.map((item) => (
-              <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="text-xs font-black uppercase text-slate-500">{item.label}</div>
-                <div className="mt-2 text-2xl font-black text-slate-950">{item.value}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-5 rounded-lg border border-slate-200 bg-white p-5">
-            <SectionTitle icon={LineChart} title={`${report} Trend`} />
-            <div className="mt-5">
-              <LineSpark values={[32, 48, 44, 61, 58, 73, 69, 82, 78, 88, 84, 96]} color="#2563eb" />
-            </div>
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {["PDF", "Excel", "CSV"].map((format) => (
-              <button key={format} onClick={() => runAction("Export ready", `${report} ${format} export generated.`)} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-black hover:bg-slate-50"><Download size={15} />{format}</button>
-            ))}
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "setting-detail") {
-      const card = adminSettingCards.find((item) => item.id === selectedSettingId) || adminSettingCards[0];
-      const Icon = card.icon;
-      const fields = settingFieldGroups[card.id] || [];
-
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle
-            icon={Icon}
-            title={card.title}
-            action={
-              <button onClick={() => openPage("settings")} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
-                <ArrowLeft size={16} />
-                Back to Settings
-              </button>
-            }
-          />
-          <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold leading-6 text-blue-800">
-            {card.description} Changes save instantly and are stored for this admin portal.
-          </div>
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
-            {fields.map((field) => renderSettingField(card.id, field))}
-          </div>
-        </section>
-      );
-    }
-    if (activePage === "settings") {
-      return (
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle icon={Settings} title="System Settings" />
-          <div className="mt-5">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input className="h-12 w-full rounded-lg border border-slate-200 bg-white pl-11 pr-4 text-sm font-semibold outline-none focus:border-blue-500" placeholder="Search settings..." />
-            </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-              {adminSettingCards.map((card) => {
-                const Icon = card.icon;
-                return (
-                  <button
-                    key={card.id}
-                    onClick={() => openSettingDetail(card.id)}
-                    className="group flex min-h-24 items-center gap-4 rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
-                  >
-                    <span className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-blue-600 text-white transition group-hover:bg-blue-700">
-                      <Icon size={25} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-base font-black text-slate-900">{card.title}</span>
-                      <span className="mt-1 block text-sm font-semibold leading-5 text-slate-500">{card.description}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-      );
-    }
   };
 
   if (!isAuthenticated) {
@@ -2518,7 +580,6 @@ const AdminPage = () => {
                   ) : (
                     <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-xs font-black text-white">{selectedProfile.initials}</span>
                   )}
-                  {/* FIX 11: Split name and take first word only */}
                   {selectedProfile.name.split(" ")[0]}
                 </button>
               </div>
@@ -2527,63 +588,79 @@ const AdminPage = () => {
 
           <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_340px]">
             <section className="scrollbar-none min-h-0 overflow-y-auto p-4 sm:p-6">
-              {renderEditPanel()}
-              {renderPage()}
+              <EditPanel editingRecord={editingRecord} setEditingRecord={setEditingRecord} saveEditedRecord={saveEditedRecord} sendEditedRecordToUser={sendEditedRecordToUser} />
+              <AdminPageContent
+                activePage={activePage}
+                selectedProfile={selectedProfile}
+                customerRows={customerRows}
+                claimRows={claimRows}
+                supportChats={supportChats}
+                requirementRows={requirementRows}
+                documentRows={documentRows}
+                planRows={planRows}
+                activeUsers={activeUsers}
+                refreshRealUsers={refreshRealUsers}
+                createCustomer={createCustomer}
+                createClaim={createClaim}
+                createRequirement={createRequirement}
+                createPlan={createPlan}
+                actionButtons={actionButtons}
+                respondToClaim={respondToClaim}
+                rejectClaimForMissingDetails={rejectClaimForMissingDetails}
+                runAction={runAction}
+                setSupportChats={setSupportChats}
+                selectedChat={selectedChat}
+                setSelectedChat={setSelectedChat}
+                adminReply={adminReply}
+                setAdminReply={setAdminReply}
+                addAuditLogEntry={addAuditLogEntry}
+                selectedDocument={selectedDocument}
+                setSelectedDocument={setSelectedDocument}
+                currentDocumentKey={currentDocumentKey}
+                currentDocumentMarks={currentDocumentMarks}
+                draftMark={draftMark}
+                markupTool={markupTool}
+                setMarkupTool={setMarkupTool}
+                startMarkup={startMarkup}
+                continueMarkup={continueMarkup}
+                finishMarkup={finishMarkup}
+                undoDocumentMark={undoDocumentMark}
+                sendDocumentCorrection={sendDocumentCorrection}
+                startEditRecord={startEditRecord}
+                mutateRows={mutateRows}
+                openReportDetail={openReportDetail}
+                selectedReport={selectedReport}
+                auditLogs={auditLogs}
+                setAuditLogs={setAuditLogs}
+                selectedSettingId={selectedSettingId}
+                getSettingValue={getSettingValue}
+                updateSettingModule={updateSettingModule}
+                updateStructuredSetting={updateStructuredSetting}
+                updateSettingFile={updateSettingFile}
+                openPage={openPage}
+                openSettingDetail={openSettingDetail}
+                adminNameDraft={adminNameDraft}
+                setAdminNameDraft={setAdminNameDraft}
+                updateAdminPhoto={updateAdminPhoto}
+                saveAdminName={saveAdminName}
+                passwordDraft={passwordDraft}
+                setPasswordDraft={setPasswordDraft}
+                showAdminProfilePassword={showAdminProfilePassword}
+                setShowAdminProfilePassword={setShowAdminProfilePassword}
+                saveAdminPassword={saveAdminPassword}
+                passwordMessage={passwordMessage}
+              />
             </section>
 
-            <aside className="hidden min-h-0 overflow-y-auto border-l border-slate-200 bg-white p-5 xl:block">
-              <div className="sticky top-0 bg-white pb-4">
-                <div className="text-sm font-black text-slate-950">Right Panel</div>
-                <div className="mt-1 text-xs font-semibold text-slate-500">Independent scroll area</div>
-              </div>
-
-              <div className="space-y-5">
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center gap-3">
-                    {selectedProfile.profilePhoto ? (
-                      <img src={selectedProfile.profilePhoto} alt={selectedProfile.name} className="h-11 w-11 rounded-lg object-cover" />
-                    ) : (
-                      <span className="grid h-11 w-11 place-items-center rounded-lg bg-blue-600 text-sm font-black text-white">{selectedProfile.initials}</span>
-                    )}
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-black">{selectedProfile.name}</div>
-                      <div className="truncate text-xs font-semibold text-slate-500">{selectedProfile.role}</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs font-semibold leading-5 text-slate-600">{selectedProfile.access}</div>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <div className="text-sm font-black text-slate-950">{detail.title}</div>
-                  {detail.photo && <img src={detail.photo} alt={detail.title} className="mt-3 h-24 w-24 rounded-lg object-cover" />}
-                  <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-950 p-3 text-xs font-semibold leading-5 text-slate-100">{detail.body}</pre>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <div className="text-sm font-black text-slate-950">Operations Queue</div>
-                  <div className="mt-3 space-y-2 text-sm font-bold text-slate-700">
-                    <button onClick={() => openPage("documents")} className="flex w-full justify-between rounded-lg bg-slate-50 px-3 py-3 text-left hover:bg-slate-100"><span>Pending verifications</span><span>{documentRows.filter(d => d.status === "Pending").length}</span></button>
-                    <button onClick={() => openPage("claims")} className="flex w-full justify-between rounded-lg bg-slate-50 px-3 py-3 text-left hover:bg-slate-100"><span>Claims in review</span><span>{claimRows.filter(c => c.status === "Under Review").length}</span></button>
-                    <button onClick={() => openPage("support")} className="flex w-full justify-between rounded-lg bg-slate-50 px-3 py-3 text-left hover:bg-slate-100"><span>Open support chats</span><span>{supportChats.filter(s => s.status !== "Resolved").length}</span></button>
-                    <button onClick={() => openPage("requirements")} className="flex w-full justify-between rounded-lg bg-slate-50 px-3 py-3 text-left hover:bg-slate-100"><span>Quotes requested</span><span>{requirementRows.length}</span></button>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 p-4">
-                  <div className="text-sm font-black text-slate-950">Quick Actions</div>
-                  <div className="mt-3 grid gap-2">
-                    {[
-                      ["Create plan", "policies"],
-                      ["Send reminder", "notifications"],
-                      ["Export claims", "reports"],
-                      ["Open audit logs", "settings"],
-                    ].map(([label, page]) => (
-                      <button key={label} onClick={() => openPage(page)} className="rounded-lg border border-slate-200 px-3 py-2 text-left text-xs font-black hover:bg-slate-50">{label}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </aside>
+            <RightPanel
+              selectedProfile={selectedProfile}
+              detail={detail}
+              documentRows={documentRows}
+              claimRows={claimRows}
+              supportChats={supportChats}
+              requirementRows={requirementRows}
+              openPage={openPage}
+            />
           </div>
         </main>
       </div>

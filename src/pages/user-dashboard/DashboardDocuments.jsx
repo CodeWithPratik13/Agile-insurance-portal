@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { FileText, FileUp, ShieldCheck, Sparkles, Download } from "lucide-react";
 import { load, save } from "../../utils/storage";
-import { fileToDataUrl } from "../../utils/api";
+import { fileToDataUrl } from "../../utils/ui";
 
 // Documents Center headings, upload labels, KYC status text, and vault card copy are controlled here.
 const DashboardDocuments = () => {

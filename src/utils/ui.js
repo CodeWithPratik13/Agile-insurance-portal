@@ -1,4 +1,3 @@
-// UI helper used by document preview inputs.
 export const fileToDataUrl = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -12,6 +11,5 @@ export const fileToBase64 = async (file) => {
   return dataUrl.split(",")[1] || "";
 };
 
-// Static UI-only assistant response.
-export const openAiChat = async () =>
-  "This is a UI-only assistant preview. Live support answers are not connected in this version.";
+export const generateAssistantReply = async () =>
+  "This is a frontend-only assistant preview. Live support answers are not connected in this version.";

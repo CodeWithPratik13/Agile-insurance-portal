@@ -24,7 +24,7 @@ const readSessionUser = () => {
   }
 };
 
-// Builds the local portal knowledge sent to OpenAI for insurance-only assistance.
+// Builds local portal knowledge for the frontend assistant.
 export const buildAssistantKnowledge = () => {
   const user = readSessionUser();
   const purchases = load("purchases", []);
@@ -78,7 +78,7 @@ export const buildAssistantKnowledge = () => {
       buyHealthPolicy: "/health-insurance",
     },
     demoRules: {
-      backend: "No backend is used. Auth, documents, claims, purchases, and payments are stored locally in the browser.",
+      frontendOnly: "Auth, documents, claims, purchases, and payments are stored locally in the browser.",
       otp: "The demo registration OTP is 123456.",
       documents: "Uploaded documents are stored locally as frontend demo records.",
       payments: "Payments are mock/demo flows and do not charge real money.",

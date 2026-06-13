@@ -495,7 +495,7 @@ const CheckoutPage = () => {
               <div>
                 <div className="text-sm font-black text-slate-900">Upload documents for admin review</div>
                 <div className="mt-1 text-sm font-semibold text-slate-600">
-                  Backend handoff: send these files as multipart uploads to Express, then store returned document IDs.
+                  Document names are stored as frontend checkout preview data for this demo.
                 </div>
               </div>
               <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -610,7 +610,7 @@ const CheckoutPage = () => {
                   PCI-DSS Security (demo) • Trust badges • Fraud checks
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-600">
-                  By paying you agree to policy T&C (mock). No backend is used in this project.
+                  Demo checkout only. No real payment is processed in this project.
                 </div>
               </div>
             </motion.div>

@@ -5,7 +5,6 @@ import { Lock, Mail, MapPin, Phone, ShieldCheck, User } from "lucide-react";
 import { useAuth } from "../contexts/useAuth";
 
 // Frontend-only authentication screen.
-// Backend team: connect form submit handlers to real register/login/OTP/social-auth APIs in AuthContext.jsx.
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
 
 const getSafeReturnTo = (value) => {
@@ -55,7 +54,6 @@ const AuthPage = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  // Backend team: replace these constants with feature flags from the backend if needed.
   const customerPortalEnabled = true;
   const googleLoginEnabled = true;
 
@@ -164,7 +162,7 @@ const AuthPage = () => {
                 {mode === "register" ? "Create your account" : "Welcome back"}
               </h1>
               <p className="mt-2 text-sm text-slate-600 sm:text-base">
-                Use any email and password to preview the dashboard UI. Backend team can replace this with real auth.
+                Use any email and password to preview the dashboard UI.
               </p>
               {!customerPortalEnabled ? (
                 <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
@@ -329,7 +327,7 @@ const AuthPage = () => {
                 </div>
               ) : (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                  Google sign-in will be connected by backend team.
+                  Google sign-in is available as a frontend preview.
                 </div>
               )}
             </div>

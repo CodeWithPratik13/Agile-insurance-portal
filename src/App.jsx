@@ -10,19 +10,20 @@ import PaymentSuccessPage from "./pages/PaymentSuccessPage";
 import AdminPage from "./pages/AdminPage";
 import CalculatorPage from "./pages/CalculatorPage";
 import InfoPage from "./pages/InfoPage";
+import SystemConfigurationPage from "./pages/SystemConfigurationPage";
 import WhyChoosePage from "./pages/WhyChoosePage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import DashboardLayout from "./layouts/DashboardLayout";
-import DashboardOverview from "./pages/dashboard/DashboardOverview";
-import DashboardPolicies from "./pages/dashboard/DashboardPolicies";
-import DashboardClaims from "./pages/dashboard/DashboardClaims";
-import DashboardPayments from "./pages/dashboard/DashboardPayments";
-import DashboardRenewals from "./pages/dashboard/DashboardRenewals";
-import DashboardDocuments from "./pages/dashboard/DashboardDocuments";
-import DashboardContact from "./pages/dashboard/DashboardContact";
-import DashboardNotifications from "./pages/dashboard/DashboardNotifications";
-import DashboardProfile from "./pages/dashboard/DashboardProfile";
-import DashboardSecurity from "./pages/dashboard/DashboardSecurity";
+import DashboardOverview from "./pages/user-dashboard/DashboardOverview";
+import DashboardPolicies from "./pages/user-dashboard/DashboardPolicies";
+import DashboardClaims from "./pages/user-dashboard/DashboardClaims";
+import DashboardPayments from "./pages/user-dashboard/DashboardPayments";
+import DashboardRenewals from "./pages/user-dashboard/DashboardRenewals";
+import DashboardDocuments from "./pages/user-dashboard/DashboardDocuments";
+import DashboardContact from "./pages/user-dashboard/DashboardContact";
+import DashboardNotifications from "./pages/user-dashboard/DashboardNotifications";
+import DashboardProfile from "./pages/user-dashboard/DashboardProfile";
+import DashboardSecurity from "./pages/user-dashboard/DashboardSecurity";
 import NotFoundPage from "./pages/NotFoundPage";
 
 // Main app routing configuration
@@ -75,6 +76,7 @@ const App = () => {
 
       {/* Admin routes - specialized admin interface with role-based access */}
       <Route path="/admin" element={<AdminPage />} />
+      <Route path="/admin/system-configuration" element={<SystemConfigurationPage />} />
 
       {/* Protected dashboard routes - requires authentication */}
       <Route

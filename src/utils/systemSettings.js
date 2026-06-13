@@ -82,7 +82,7 @@ export const policyFeatureDefaults = {
   business: ["Fire Cover", "Cyber Liability", "Employee Protection"],
 };
 
-// Returns static UI defaults. No backend or local persistence is connected in this frontend-only build.
+// Returns static UI defaults for this frontend-only build.
 export const readSystemSettings = () => {
   return {
     modules: {

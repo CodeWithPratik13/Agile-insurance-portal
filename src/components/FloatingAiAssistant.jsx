@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bot, SendHorizonal, Sparkles, X } from "lucide-react";
-import { openAiChat } from "../utils/api";
-import { buildAssistantKnowledge } from "../utils/assistantKnowledge";
+import { generateAssistantReply } from "../utils/ui";
 
-// Floating AI widget copy and backend chat handoff live here.
+// Floating AI widget copy and frontend preview responses live here.
 const makeId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
 const FloatingAiAssistant = ({ contextLabel = "Agile AI", prompt = null }) => {
@@ -31,12 +30,7 @@ const FloatingAiAssistant = ({ contextLabel = "Agile AI", prompt = null }) => {
     setBusy(true);
 
     try {
-      const reply = await openAiChat({
-        message: cleanValue,
-        contextLabel,
-        systemContext: buildAssistantKnowledge(),
-        history: messages.map(({ role, text: messageText }) => ({ role, text: messageText })),
-      });
+      const reply = await generateAssistantReply();
       setMessages((current) => [
         ...current,
         { id: makeId("a"), role: "ai", text: reply || "I could not produce an answer. Please try again." },
@@ -53,7 +47,7 @@ const FloatingAiAssistant = ({ contextLabel = "Agile AI", prompt = null }) => {
     } finally {
       setBusy(false);
     }
-  }, [busy, contextLabel, messages]);
+  }, [busy]);
 
   useEffect(() => {
     const cleanPrompt = String(prompt?.text || "").trim();
